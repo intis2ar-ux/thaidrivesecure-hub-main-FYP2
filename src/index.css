@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/500.css";
+@import "@fontsource/dm-sans/600.css";
+@import "@fontsource/dm-sans/700.css";
+
+@layer base {
+  :root {
+    /* ThaiDriveSecure Brand Colors */
+    --background: 220 20% 97%;
+    --foreground: 220 30% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 18%;
+
+    /* Primary Blue: #1B3B6F */
+    --primary: 216 61% 27%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Light Blue */
+    --secondary: 216 30% 96%;
+    --secondary-foreground: 216 61% 27%;
+
+    /* Muted */
+    --muted: 220 16% 95%;
+    --muted-foreground: 220 10% 50%;
+
+    /* Accent Teal: #1FB6A6 */
+    --accent: 174 71% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning */
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 30% 18%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 174 71% 42%;
+
+    --radius: 0.625rem;
+
+    /* Sidebar */
+    --sidebar-background: 220 35% 16%;
+    --sidebar-foreground: 220 15% 90%;
+    --sidebar-primary: 174 71% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 30% 22%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 25% 24%;
+    --sidebar-ring: 174 71% 42%;
+
+    /* Chart colors */
+    --chart-1: 174 71% 42%;
+    --chart-2: 216 61% 27%;
+    --chart-3: 142 71% 45%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 72% 51%;
+  }
+
+  .dark {
+    --background: 220 25% 8%;
+    --foreground: 220 10% 92%;
+
+    --card: 220 25% 12%;
+    --card-foreground: 220 10% 92%;
+
+    --popover: 220 25% 12%;
+    --popover-foreground: 220 10% 92%;
+
+    --primary: 174 71% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 25% 16%;
+    --secondary-foreground: 220 10% 92%;
+
+    --muted: 220 20% 16%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 174 71% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 30% 18%;
+
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 174 71% 42%;
+
+    --sidebar-background: 220 30% 10%;
+    --sidebar-foreground: 220 10% 92%;
+    --sidebar-primary: 174 71% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 25% 16%;
+    --sidebar-accent-foreground: 220 10% 92%;
+    --sidebar-border: 220 20% 18%;
+    --sidebar-ring: 174 71% 42%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: "DM Sans", sans-serif;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer utilities {
+  /* Consistent card elevation */
+  .card-elevated {
+    @apply bg-card border border-border shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+
+  /* Consistent page section spacing */
+  .page-section {
+    @apply space-y-6;
+  }
+
+  /* Table row hover */
+  .table-row-hover {
+    @apply hover:bg-muted/40 transition-colors duration-150;
+  }
+}

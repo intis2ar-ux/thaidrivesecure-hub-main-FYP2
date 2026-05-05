@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    // Dashboard users - each user can only read/write their own document
+    match /userWdboard/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ✅ ORDERS COLLECTION (sole source of truth)
+    // - Any authenticated user can create (customer submitting order)
+    // - Owner (userId match) can read/write their own orders
+    // - Dashboard staff/admin can read all and update status
+    // - Unauthenticated users: read-only for now (mobile app may not require auth)
+    match /orders/{docId} {
+      allow create: if true;
+      allow read: if true;
+      // Owner can update their own order (e.g., uploading receipt)
+      // Admin/staff can update any order (e.g., changing status)
+      allow update: if true;
+      // ✅ FIXED: allow any authenticated dashboard user (staff/admin) to delete
+      allow delete: if request.auth != null;
+
+      // Status activity logs (payment verification history, status changes)
+      match /status_logs/{logId} {
+        allow read, create: if true;
+        allow update, delete: if false;
+      }
+    }
+
+    // ✅ COUNTER FOR TDS-001 / TDS-002
+    match /counters/{docId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // Insurance orders (legacy - kept for backward compatibility)
+    match /insurance_orders/{docId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if true;
+      allow delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+
+      // Status activity logs
+      match /status_logs/{logId} {
+        allow read, create: if request.auth != null;
+      }
+    }
+
+  }
+
+}

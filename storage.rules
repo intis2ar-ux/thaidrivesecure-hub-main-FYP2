@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Existing order-related uploads (receipts, passports, vehicle grants)
+    match /orders/{orderId}/{fileName=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Insurance documents generated from the admin dashboard.
+    //
+    // Read:  any authenticated user (so a customer can open their own link).
+    // Write: any authenticated user — role enforcement happens client-side via
+    //        useAuth() inside generateAndStoreInsuranceDocument().
+    //
+    // SAFE-VERSION (recommended once Firebase Auth custom claims are set up):
+    //   allow write: if request.auth != null
+    //     && request.auth.token.role in ["admin", "staff"];
+    //
+    // Until then, this temporary rule keeps the feature functional.
+    match /insurance_documents/{applicationId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+  }
+}
