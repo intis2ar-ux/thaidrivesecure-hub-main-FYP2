@@ -26,7 +26,7 @@ export const ExtractedDataPanel = ({
 
   // Simulate comparison with application data
   const getExpectedValue = (label: string): string | undefined => {
-    if (!application) return undefined;
+    if (!application || !label) return undefined;
     const labelLower = label.toLowerCase();
     if (labelLower.includes("name")) return application.name;
     if (labelLower.includes("email")) return undefined;
@@ -35,13 +35,20 @@ export const ExtractedDataPanel = ({
 
   const checkMismatch = (field: ExtractedField): boolean => {
     if (field.isMismatch !== undefined) return field.isMismatch;
-    const expected = field.expectedValue || getExpectedValue(field.label);
-    if (!expected) return false;
-    return expected.toLowerCase() !== field.value.toLowerCase();
+    const f = field as any;
+    const label = f.label || f.fieldName || "";
+    const value = f.value || f.extractedValue || "";
+    
+    const expected = f.expectedValue || getExpectedValue(label);
+    if (!expected || !value) return false;
+    return expected.toLowerCase() !== value.toLowerCase();
   };
 
   const missingFields = ["Date of Birth", "Address"].filter(
-    (f) => !fields.some((field) => field.label.toLowerCase().includes(f.toLowerCase()))
+    (f) => !fields.some((field) => {
+      const label = field.label || (field as any).fieldName || "";
+      return label.toLowerCase().includes(f.toLowerCase());
+    })
   );
 
   return (
@@ -60,8 +67,12 @@ export const ExtractedDataPanel = ({
       {/* Extracted Fields */}
       <div className="space-y-2">
         {fields.map((field, index) => {
+          const f = field as any;
+          const label = f.label || f.fieldName || "Unknown Field";
+          const value = f.value || f.extractedValue || "-";
+          
           const isMismatch = checkMismatch(field);
-          const expectedValue = field.expectedValue || getExpectedValue(field.label);
+          const expectedValue = f.expectedValue || getExpectedValue(label);
 
           return (
             <div
@@ -77,9 +88,9 @@ export const ExtractedDataPanel = ({
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                    {field.label}
+                    {label}
                   </p>
-                  <p className="font-semibold mt-0.5">{field.value}</p>
+                  <p className="font-semibold mt-0.5">{value}</p>
                   {isMismatch && expectedValue && (
                     <div className="mt-1 flex items-center gap-1 text-destructive">
                       <XCircle className="h-3 w-3" />

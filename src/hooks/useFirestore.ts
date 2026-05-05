@@ -15,7 +15,8 @@ import {
   QueryConstraint,
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, storage, functions } from "@/lib/firebase";
 import {
   Application,
   AIVerification,
@@ -390,7 +391,22 @@ export const useAIVerifications = () => {
     }
   };
 
-  return { verifications, loading, error, updateVerification };
+  const processDocumentAI = async (
+    applicationId: string,
+    documentUrl: string,
+    documentType: "passport" | "vehicle_grant"
+  ) => {
+    try {
+      const processDocumentFn = httpsCallable(functions, "processDocument");
+      const result = await processDocumentFn({ applicationId, documentUrl, documentType });
+      return result.data as any;
+    } catch (err: any) {
+      console.error("Error processing document with AI:", err);
+      throw err;
+    }
+  };
+
+  return { verifications, loading, error, updateVerification, processDocumentAI };
 };
 
 // Payments Hook - Derives payments from orders collection

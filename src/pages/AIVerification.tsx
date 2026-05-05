@@ -513,7 +513,7 @@ const AIVerification = () => {
 
                   <TabsContent value="data" className="mt-4">
                     <ExtractedDataPanel
-                      fields={selectedVerification.extractedFields}
+                      fields={selectedVerification.extractedFields || []}
                       application={getApplication(selectedVerification.applicationId)}
                     />
                   </TabsContent>

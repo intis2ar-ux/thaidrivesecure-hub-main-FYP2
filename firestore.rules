@@ -52,6 +52,16 @@ service cloud.firestore {
       }
     }
 
+    // ✅ AI VERIFICATIONS (Document AI extraction results)
+    // Written by Cloud Functions (Admin SDK bypasses rules).
+    // Dashboard staff/admin can read all and update (approve/reject).
+    match /ai_verifications/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+
   }
 
 }

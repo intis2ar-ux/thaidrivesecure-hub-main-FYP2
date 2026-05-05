@@ -11,6 +11,7 @@ import { PricingSection } from "./sections/PricingSection";
 import { DeliveryStatusSection } from "./sections/DeliveryStatusSection";
 import { StatusHistorySection } from "./sections/StatusHistorySection";
 import { DocumentPreviewModal } from "./sections/DocumentPreviewModal";
+import { AIAnalysisSection } from "./sections/AIAnalysisSection";
 
 interface ApplicationDetailPanelProps {
   application: Application;
@@ -41,6 +42,8 @@ export const ApplicationDetailPanel = ({ application, onClose }: ApplicationDeta
         <PackagesSection application={application} />
         <Separator />
         <DocumentsSection application={application} onPreview={setPreviewImage} />
+        <Separator />
+        <AIAnalysisSection application={application} />
         <Separator />
         <PricingSection application={application} onPreview={setPreviewImage} />
         <Separator />
