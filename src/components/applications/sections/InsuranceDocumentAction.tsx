@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
-import { FileText, Loader2, ExternalLink, RefreshCw, ShieldCheck, Download, Lock } from "lucide-react";
+import {
+  FileText, Loader2, ExternalLink, RefreshCw, ShieldCheck,
+  Download, Lock, QrCode, ClipboardList, Car,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Application } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -10,27 +13,29 @@ interface Props {
   application: Application;
 }
 
+interface DocCard {
+  key: "insurance" | "tdac" | "tm2" | "tm3";
+  label: string;
+  description: string;
+  url: string;
+  icon: React.ElementType;
+  color: string;
+}
+
 export const InsuranceDocumentAction = ({ application }: Props) => {
   const { user } = useAuth();
   const { generateAndStoreInsuranceDocument } = useApplications();
   const { payments } = usePayments();
   const [loading, setLoading] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
-  const hasDocument = !!application.insuranceDocumentUrl;
-
-  // Determine whether staff has acted on this application's payment in the
-  // Payments page. Any action other than "pending_verification" counts —
-  // verified, rejected, or requested update all show staff has reviewed it.
+  // Any verified/rejected/update-requested counts as staff acted
   const staffActedOnPayment = useMemo(() => {
     const match = payments.find((p) => p.applicationId === application.id);
     if (!match) return false;
     return match.verificationStatus !== "pending_verification";
   }, [payments, application.id]);
 
-  // Eligibility gate for GENERATING a new document.
-  // Once a document exists it must always be accessible to staff,
-  // regardless of subsequent status / payment / OCR changes.
   const canGenerate =
     staffActedOnPayment &&
     application.paymentStatus === "paid" &&
@@ -39,7 +44,6 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
       application.status === "processing" ||
       application.status === "document_generated");
 
-  // Reason message when generation is blocked
   const blockReason = useMemo(() => {
     if (!staffActedOnPayment) return "Awaiting payment review in the Payments page.";
     if (application.paymentStatus !== "paid") return "Payment has not been confirmed as paid.";
@@ -47,10 +51,15 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
     return "Application status must be Approved or Processing.";
   }, [staffActedOnPayment, application.paymentStatus, application.ocrScore, application.status]);
 
-  // Hide the whole block only if there's no document AND staff can't generate one
-  // AND the application isn't in a relevant state.
+  const hasAnyDoc =
+    !!application.insuranceDocumentUrl ||
+    !!application.tdacDocumentUrl ||
+    !!application.tm2DocumentUrl ||
+    !!application.tm3DocumentUrl;
+
+  // Hide entirely if no docs and can't generate and not in relevant state
   if (
-    !hasDocument &&
+    !hasAnyDoc &&
     !canGenerate &&
     application.status !== "approved" &&
     application.status !== "processing" &&
@@ -59,38 +68,68 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
     return null;
   }
 
+  const docCards: DocCard[] = [
+    {
+      key: "insurance",
+      label: "Vehicle Insurance",
+      description: "Cross-border insurance certificate",
+      url: application.insuranceDocumentUrl || "",
+      icon: ShieldCheck,
+      color: "text-blue-600",
+    },
+    {
+      key: "tdac",
+      label: "TDAC QR Mockup",
+      description: "Thailand road tax certificate",
+      url: application.tdacDocumentUrl || "",
+      icon: QrCode,
+      color: "text-emerald-600",
+    },
+    {
+      key: "tm2",
+      label: "TM2 — Immigration Card",
+      description: "Notification of staying in Thailand",
+      url: application.tm2DocumentUrl || "",
+      icon: ClipboardList,
+      color: "text-violet-600",
+    },
+    {
+      key: "tm3",
+      label: "TM3 — Vehicle Entry",
+      description: "Vehicle entry declaration form",
+      url: application.tm3DocumentUrl || "",
+      icon: Car,
+      color: "text-orange-600",
+    },
+  ];
+
   const handleGenerate = async () => {
     if (loading) return;
     setLoading(true);
     try {
-      const url = await generateAndStoreInsuranceDocument(application, user);
-      toast.success("Insurance document generated successfully");
-      // Open immediately for staff convenience
-      window.open(url, "_blank", "noopener");
+      await generateAndStoreInsuranceDocument(application, user);
+      toast.success("All 4 documents generated successfully!", {
+        description: "Vehicle Insurance, TDAC QR, TM2, and TM3 are ready.",
+      });
     } catch (err: any) {
-      toast.error(err?.message || "Failed to generate document");
+      toast.error(err?.message || "Failed to generate documents");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleView = () => {
-    if (application.insuranceDocumentUrl) {
-      window.open(application.insuranceDocumentUrl, "_blank", "noopener");
-    }
+  const handleView = (url: string) => {
+    if (url) window.open(url, "_blank", "noopener");
   };
 
-  const handleDownload = async () => {
-    if (!application.insuranceDocumentUrl || downloading) return;
-    setDownloading(true);
+  const handleDownload = async (url: string, label: string, key: string) => {
+    if (!url || downloadingKey) return;
+    setDownloadingKey(key);
     try {
       const refId = application.orderId || application.id;
-      const filename = `Insurance-${refId}.pdf`;
-
-      // Try fetch+blob first for a clean custom filename.
-      // If CORS blocks it, fall back to a direct anchor download.
+      const filename = `${label.replace(/\s+/g, "-")}-${refId}.pdf`;
       try {
-        const res = await fetch(application.insuranceDocumentUrl);
+        const res = await fetch(url);
         if (!res.ok) throw new Error("fetch_failed");
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
@@ -102,9 +141,8 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
         document.body.removeChild(link);
         URL.revokeObjectURL(objectUrl);
       } catch {
-        // CORS / network fallback — open the storage URL directly.
         const link = document.createElement("a");
-        link.href = application.insuranceDocumentUrl;
+        link.href = url;
         link.download = filename;
         link.target = "_blank";
         link.rel = "noopener";
@@ -112,107 +150,129 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
         link.click();
         document.body.removeChild(link);
       }
-
-      toast.success("Insurance document downloaded");
+      toast.success(`${label} downloaded`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to download document");
+      toast.error(err?.message || "Failed to download");
     } finally {
-      setDownloading(false);
+      setDownloadingKey(null);
     }
   };
 
   return (
-    <div className="mt-4 pt-4 border-t border-border">
-      <div className="flex items-center gap-2 mb-3">
-        <ShieldCheck className="h-4 w-4 text-accent" />
-        <span className="text-sm font-semibold text-foreground">Application Actions</span>
+    <div className="mt-4 pt-4 border-t border-border space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-accent" />
+          <span className="text-sm font-semibold text-foreground">Document Pack</span>
+        </div>
+        {hasAnyDoc && canGenerate && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGenerate}
+            disabled={loading}
+            className="h-7 gap-1.5 text-xs"
+          >
+            {loading ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Regenerating…</>
+            ) : (
+              <><RefreshCw className="h-3.5 w-3.5" /> Re-generate All</>
+            )}
+          </Button>
+        )}
       </div>
 
-      {!hasDocument ? (
+      {/* Generate button (no docs yet) */}
+      {!hasAnyDoc && (
         <div className="space-y-2">
           <Button
             onClick={canGenerate ? handleGenerate : undefined}
             disabled={!canGenerate || loading}
-            className="w-full"
-            title={!canGenerate ? blockReason : undefined}
+            className="w-full gap-2"
           >
             {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating...
-              </>
+              <><Loader2 className="h-4 w-4 animate-spin" /> Generating All Documents…</>
             ) : canGenerate ? (
-              <>
-                <FileText className="h-4 w-4 mr-2" />
-                Generate Insurance
-              </>
+              <><FileText className="h-4 w-4" /> Generate All Documents</>
             ) : (
-              <>
-                <Lock className="h-4 w-4 mr-2" />
-                Generate Insurance
-              </>
+              <><Lock className="h-4 w-4" /> Generate All Documents</>
             )}
           </Button>
           {!canGenerate && (
-            <p className="text-xs text-muted-foreground text-center">
-              {blockReason}
-            </p>
+            <p className="text-xs text-muted-foreground text-center">{blockReason}</p>
           )}
         </div>
-      ) : canGenerate ? (
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" onClick={handleView} disabled={loading || downloading}>
-              <ExternalLink className="h-4 w-4 mr-2" />
-              View Document
-            </Button>
-            <Button variant="outline" onClick={handleDownload} disabled={loading || downloading}>
-              {downloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Downloading...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download PDF
-                </>
-              )}
-            </Button>
-          </div>
-          <Button onClick={handleGenerate} disabled={loading || downloading} className="w-full">
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Re-generating...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Re-generate
-              </>
-            )}
-          </Button>
-        </div>
-      ) : (
+      )}
+
+      {/* 2×2 document cards */}
+      {hasAnyDoc && (
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" onClick={handleView} disabled={loading || downloading}>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            View Document
-          </Button>
-          <Button variant="outline" onClick={handleDownload} disabled={loading || downloading}>
-            {downloading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Downloading...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                Download PDF
-              </>
-            )}
-          </Button>
+          {docCards.map((card) => {
+            const Icon = card.icon;
+            const ready = !!card.url;
+            const isDownloading = downloadingKey === card.key;
+
+            return (
+              <div
+                key={card.key}
+                className={`p-3 rounded-lg border transition-all ${
+                  ready
+                    ? "border-border bg-card hover:shadow-sm"
+                    : "border-dashed border-border/50 bg-muted/30 opacity-60"
+                }`}
+              >
+                <div className="flex items-start gap-2 mb-2.5">
+                  <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${ready ? card.color : "text-muted-foreground"}`} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground leading-tight">{card.label}</p>
+                    <p className="text-xs text-muted-foreground leading-tight mt-0.5">{card.description}</p>
+                  </div>
+                </div>
+
+                {ready ? (
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs gap-1"
+                      onClick={() => handleView(card.url)}
+                      disabled={isDownloading}
+                    >
+                      <ExternalLink className="h-3 w-3" /> View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs gap-1"
+                      onClick={() => handleDownload(card.url, card.label, card.key)}
+                      disabled={!!downloadingKey}
+                    >
+                      {isDownloading ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> …</>
+                      ) : (
+                        <><Download className="h-3 w-3" /> Save</>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center mt-1">Not yet generated</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Loading progress overlay */}
+      {loading && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+          <div className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Generating documents…</span>
+            <br />
+            Insurance PDF, TDAC QR, TM2 Form, TM3 Form — uploading to Firebase
+          </div>
         </div>
       )}
     </div>

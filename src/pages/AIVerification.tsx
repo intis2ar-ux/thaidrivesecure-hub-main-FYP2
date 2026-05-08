@@ -65,15 +65,18 @@ const AIVerification = () => {
     action: VerificationAudit["action"],
     reason?: RejectionReason,
     notes?: string
-  ): VerificationAudit => ({
-    id: `audit-${Date.now()}`,
-    reviewerName: user?.name || "Staff",
-    reviewerId: user?.id || "unknown",
-    action,
-    reason,
-    notes,
-    timestamp: new Date(),
-  });
+  ): VerificationAudit => {
+    const entry: any = {
+      id: `audit-${Date.now()}`,
+      reviewerName: user?.name || "Staff",
+      reviewerId: user?.id || "unknown",
+      action,
+      timestamp: new Date(),
+    };
+    if (reason !== undefined) entry.reason = reason;
+    if (notes !== undefined) entry.notes = notes;
+    return entry as VerificationAudit;
+  };
 
   const handleApprove = async () => {
     if (!selectedVerification) return;
@@ -99,6 +102,7 @@ const AIVerification = () => {
       });
       setIsReviewOpen(false);
     } catch (error) {
+      console.error("Error in handleApprove:", error);
       toast({
         title: "Error",
         description: "Failed to approve document.",
@@ -134,6 +138,7 @@ const AIVerification = () => {
       });
       setIsReviewOpen(false);
     } catch (error) {
+      console.error("Error in handleReject:", error);
       toast({
         title: "Error",
         description: "Failed to reject document.",
@@ -164,6 +169,7 @@ const AIVerification = () => {
       });
       setIsReviewOpen(false);
     } catch (error) {
+      console.error("Error in handleRequestReUpload:", error);
       toast({
         title: "Error",
         description: "Failed to request re-upload.",

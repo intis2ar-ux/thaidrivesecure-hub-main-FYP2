@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Application } from "@/types";
 import { Section } from "./SectionHeader";
-import { BrainCircuit, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Loader2 } from "lucide-react";
+import { BrainCircuit, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAIVerifications, useApplications } from "@/hooks/useFirestore";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -47,6 +47,20 @@ export const AIAnalysisSection = ({ application }: Props) => {
 
     return () => unsub();
   }, [application.id]);
+
+  // Gate 1: application must have been actioned (approved or rejected)
+  const isApplicationActioned =
+    application.status === "approved" ||
+    application.status === "rejected" ||
+    application.status === "processing" ||
+    application.status === "document_generated" ||
+    application.status === "completed";
+
+  // Gate 2: payment must be confirmed
+  const isPaymentConfirmed = application.paymentStatus === "paid";
+
+  // Both gates must pass before AI can run
+  const canRunAI = isApplicationActioned && isPaymentConfirmed;
 
   const handleRunAI = async (type: "passport" | "vehicle_grant") => {
     try {
@@ -152,6 +166,28 @@ export const AIAnalysisSection = ({ application }: Props) => {
   return (
     <Section icon={BrainCircuit} title="AI Document Analysis">
       <div className="space-y-4 mt-2">
+
+        {/* Locked state banner */}
+        {!canRunAI && (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-muted/60 border border-border text-muted-foreground">
+            <Lock className="w-4 h-4 mt-0.5 shrink-0" />
+            <div className="text-xs leading-relaxed space-y-0.5">
+              {!isApplicationActioned && (
+                <p>
+                  <span className="font-semibold text-foreground">Application not yet actioned.</span>{" "}
+                  Staff must approve or reject the application before running AI analysis.
+                </p>
+              )}
+              {isApplicationActioned && !isPaymentConfirmed && (
+                <p>
+                  <span className="font-semibold text-foreground">Payment not confirmed.</span>{" "}
+                  AI analysis is available only after the customer's payment has been verified.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Passport Section */}
         {application.documents?.passportUrls && application.documents.passportUrls.length > 0 ? (
           <div>
@@ -161,11 +197,13 @@ export const AIAnalysisSection = ({ application }: Props) => {
                 variant="outline" 
                 size="sm" 
                 onClick={() => handleRunAI("passport")}
-                disabled={isLoading}
+                disabled={isLoading || !canRunAI}
                 className="h-8 gap-1.5"
               >
                 {loadingPassport ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing…</>
+                ) : !canRunAI ? (
+                  <><Lock className="w-3.5 h-3.5" /> Run AI</>
                 ) : (
                   <><PlayCircle className="w-3.5 h-3.5" /> Run AI</>
                 )}
@@ -184,11 +222,13 @@ export const AIAnalysisSection = ({ application }: Props) => {
                 variant="outline" 
                 size="sm" 
                 onClick={() => handleRunAI("vehicle_grant")}
-                disabled={isLoading}
+                disabled={isLoading || !canRunAI}
                 className="h-8 gap-1.5"
               >
                 {loadingVehicleGrant ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing…</>
+                ) : !canRunAI ? (
+                  <><Lock className="w-3.5 h-3.5" /> Run AI</>
                 ) : (
                   <><PlayCircle className="w-3.5 h-3.5" /> Run AI</>
                 )}

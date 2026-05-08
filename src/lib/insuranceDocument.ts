@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
-import { Application } from "@/types";
+import { Application, AiVerificationData } from "@/types";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111]; // #1B3B6F
 const ACCENT_TEAL: [number, number, number] = [31, 182, 166]; // #1FB6A6
@@ -65,12 +65,35 @@ const row = (pdf: jsPDF, label: string, value: string, cursor: Cursor) => {
   cursor.y += Math.max(6, lines.length * 5);
 };
 
-const buildCustomerSection = (pdf: jsPDF, application: Application, cursor: Cursor) => {
+const buildCustomerSection = (
+  pdf: jsPDF,
+  application: Application,
+  cursor: Cursor,
+  ocrData?: AiVerificationData
+) => {
   sectionTitle(pdf, "Customer Information", cursor);
   row(pdf, "Full Name", application.name, cursor);
   row(pdf, "Phone", application.phone, cursor);
   if (application.email) row(pdf, "Email", application.email, cursor);
   row(pdf, "Passengers", String(application.passengers ?? 1), cursor);
+
+  // Enrich with OCR passport data if available
+  if (ocrData?.passportData) {
+    const p = ocrData.passportData;
+    const pick = (keys: string[]) => {
+      for (const k of keys) {
+        const v = p[k]?.value;
+        if (v && v.trim()) return v.trim();
+      }
+      return "";
+    };
+    const passportNo  = pick(["Passport Number", "Document Number", "Passport No", "Number"]);
+    const dob         = pick(["Date of Birth", "Birth Date", "DOB", "Date Of Birth"]);
+    const nationality = pick(["Nationality", "Country"]);
+    if (passportNo)  row(pdf, "Passport No.", passportNo,  cursor);
+    if (dob)         row(pdf, "Date of Birth", dob,         cursor);
+    if (nationality) row(pdf, "Nationality",   nationality, cursor);
+  }
   cursor.y += 4;
 };
 
@@ -131,12 +154,15 @@ const buildFooter = (pdf: jsPDF, application: Application) => {
   );
 };
 
-export const generateInsurancePDF = (application: Application): Blob => {
+export const generateInsurancePDF = (
+  application: Application,
+  ocrData?: AiVerificationData
+): Blob => {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   const cursor: Cursor = { y: 38 };
 
   buildHeader(pdf, application, cursor);
-  buildCustomerSection(pdf, application, cursor);
+  buildCustomerSection(pdf, application, cursor, ocrData);
   buildVehicleSection(pdf, application, cursor);
   buildTravelSection(pdf, application, cursor);
   buildPricingSection(pdf, application, cursor);

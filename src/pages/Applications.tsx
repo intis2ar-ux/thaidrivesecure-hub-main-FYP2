@@ -119,6 +119,7 @@ const Applications = () => {
   const [editingFieldsApp, setEditingFieldsApp] = useState<Application | null>(null);
   const [isEditFieldsOpen, setIsEditFieldsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [panelWidth, setPanelWidth] = useState(480);
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -919,7 +920,35 @@ const Applications = () => {
 
         {/* Application Detail Panel */}
         <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-          <SheetContent side="right" className="w-full sm:w-[480px] p-0">
+          <SheetContent
+            side="right"
+            className="p-0 transition-none sm:max-w-none"
+            style={{ width: `${panelWidth}px`, maxWidth: '100vw' }}
+          >
+            {/* Drag Handle */}
+            <div
+              className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-primary/10 z-50 flex flex-col justify-center items-center group transition-colors"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startX = e.clientX;
+                const startWidth = panelWidth;
+                const onMouseMove = (moveEvent: MouseEvent) => {
+                  const delta = startX - moveEvent.clientX;
+                  setPanelWidth(Math.max(400, Math.min(window.innerWidth - 32, startWidth + delta)));
+                };
+                const onMouseUp = () => {
+                  document.removeEventListener("mousemove", onMouseMove);
+                  document.removeEventListener("mouseup", onMouseUp);
+                  document.body.style.cursor = "default";
+                };
+                document.body.style.cursor = "col-resize";
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
+              }}
+            >
+              <div className="w-1 h-12 bg-border rounded-full group-hover:bg-primary/50 transition-colors" />
+            </div>
+
             {selectedApp && (
               <ApplicationDetailPanel
                 application={selectedApp}

@@ -51,7 +51,20 @@ export interface Application {
   };
   ocrScore?: number;
   insuranceDocumentUrl?: string;
+  tdacDocumentUrl?: string;
+  tm2DocumentUrl?: string;
+  tm3DocumentUrl?: string;
   statusUpdatedAt?: Date;
+}
+
+export interface OcrExtractedField {
+  value: string;
+  confidence: number;
+}
+
+export interface AiVerificationData {
+  passportData?: Record<string, OcrExtractedField>;
+  vehicleGrantData?: Record<string, OcrExtractedField>;
 }
 
 export interface ExtractedField {
