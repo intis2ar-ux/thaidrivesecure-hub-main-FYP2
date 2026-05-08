@@ -336,12 +336,12 @@ export const useApplications = () => {
     const ocrData = await fetchOcrData();
 
     // 3. Generate all 4 PDFs (insurance is sync, TDAC is async due to QR)
-    const [insuranceBlob, tdacBlob] = await Promise.all([
+    const [insuranceBlob, tdacBlob, tm2Blob, tm3Blob] = await Promise.all([
       Promise.resolve(generateInsurancePDF(application, ocrData)),
       generateTdacQrPDF(application),
+      generateTm2PDF(application, ocrData),
+      generateTm3PDF(application, ocrData),
     ]);
-    const tm2Blob = generateTm2PDF(application, ocrData);
-    const tm3Blob = generateTm3PDF(application, ocrData);
 
     // 4. Upload all 4 PDFs to Firebase Storage in parallel
     const ts = Date.now();

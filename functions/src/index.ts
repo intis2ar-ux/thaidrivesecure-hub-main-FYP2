@@ -87,6 +87,13 @@ export const processDocument = onCall(
           content: encodedImage,
           mimeType,
         },
+        processOptions: {
+          ocrConfig: {
+            hints: {
+              languageHints: ["en", "th"],
+            },
+          },
+        },
       });
 
       const { document } = result;

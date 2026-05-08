@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { Application, AiVerificationData } from "@/types";
+import { loadThaiFonts } from "./fonts";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111]; // #1B3B6F
 const ACCENT_TEAL: [number, number, number] = [31, 182, 166]; // #1FB6A6
@@ -19,7 +20,7 @@ interface Cursor {
 const setText = (pdf: jsPDF, color: [number, number, number], size: number, style: "normal" | "bold" = "normal") => {
   pdf.setTextColor(color[0], color[1], color[2]);
   pdf.setFontSize(size);
-  pdf.setFont("helvetica", style);
+  pdf.setFont("Sarabun", style);
 };
 
 const buildHeader = (pdf: jsPDF, application: Application, cursor: Cursor) => {
@@ -81,9 +82,18 @@ const buildCustomerSection = (
   if (ocrData?.passportData) {
     const p = ocrData.passportData;
     const pick = (keys: string[]) => {
+      const normalizedData: Record<string, string> = {};
+      for (const [key, val] of Object.entries(p)) {
+        if (val?.value) {
+          const normKey = key.toLowerCase().replace(/_/g, " ");
+          normalizedData[normKey] = val.value.trim();
+        }
+      }
       for (const k of keys) {
-        const v = p[k]?.value;
-        if (v && v.trim()) return v.trim();
+        const normSearchKey = k.toLowerCase().replace(/_/g, " ");
+        if (normalizedData[normSearchKey]) {
+          return normalizedData[normSearchKey];
+        }
       }
       return "";
     };
@@ -154,11 +164,13 @@ const buildFooter = (pdf: jsPDF, application: Application) => {
   );
 };
 
-export const generateInsurancePDF = (
+export const generateInsurancePDF = async (
   application: Application,
   ocrData?: AiVerificationData
-): Blob => {
+): Promise<Blob> => {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  await loadThaiFonts(pdf);
+  
   const cursor: Cursor = { y: 38 };
 
   buildHeader(pdf, application, cursor);

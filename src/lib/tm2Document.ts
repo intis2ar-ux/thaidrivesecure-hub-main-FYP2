@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { Application, AiVerificationData } from "@/types";
+import { loadThaiFonts } from "./fonts";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111];
 const RED_TH: [number, number, number] = [165, 28, 28];
@@ -23,7 +24,7 @@ const setText = (
 ) => {
   pdf.setTextColor(color[0], color[1], color[2]);
   pdf.setFontSize(size);
-  pdf.setFont("helvetica", style);
+  pdf.setFont("Sarabun", style);
 };
 
 /** Labelled input box */
@@ -65,21 +66,33 @@ const sectionBar = (
   cursor.y += 11;
 };
 
-/** Helper: pick first non-empty OCR value from a list of key variants */
 const ocr = (data: Record<string, { value: string }>, keys: string[]): string => {
+  if (!data) return "";
+  const normalizedData: Record<string, string> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (val?.value) {
+      const normKey = key.toLowerCase().replace(/_/g, " ");
+      normalizedData[normKey] = val.value.trim();
+    }
+  }
+
   for (const k of keys) {
-    const v = data[k]?.value;
-    if (v && v.trim()) return v.trim();
+    const normSearchKey = k.toLowerCase().replace(/_/g, " ");
+    if (normalizedData[normSearchKey]) {
+      return normalizedData[normSearchKey];
+    }
   }
   return "";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-export const generateTm2PDF = (
+export const generateTm2PDF = async (
   application: Application,
   ocrData?: AiVerificationData
-): Blob => {
+): Promise<Blob> => {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  await loadThaiFonts(pdf);
+  
   const cursor: Cursor = { y: 0 };
   const p = ocrData?.passportData || {};
 
@@ -127,7 +140,7 @@ export const generateTm2PDF = (
   const borderRoute  = application.where || "";
 
   // ── SECTION 1: Personal Information ─────────────────────────────────
-  sectionBar(pdf, "SECTION 1 — PERSONAL INFORMATION", "", cursor);
+  sectionBar(pdf, "SECTION 1 — PERSONAL INFORMATION", "ส่วนที่ 1 — ข้อมูลบุคคล", cursor);
 
   const halfW = (CONTENT_WIDTH - 4) / 2;
   box(pdf, "Family Name", familyName || fullName, MARGIN_X, cursor.y, halfW);
@@ -144,7 +157,7 @@ export const generateTm2PDF = (
   cursor.y += 16;
 
   // ── SECTION 2: Travel Information ────────────────────────────────────
-  sectionBar(pdf, "SECTION 2 — TRAVEL INFORMATION", "", cursor);
+  sectionBar(pdf, "SECTION 2 — TRAVEL INFORMATION", "ส่วนที่ 2 — ข้อมูลการเดินทาง", cursor);
 
   // Purpose checkboxes (visual)
   setText(pdf, TEXT_MUTED, 8);
@@ -168,7 +181,7 @@ export const generateTm2PDF = (
   cursor.y += 16;
 
   // ── SECTION 3: Address in Thailand ───────────────────────────────────
-  sectionBar(pdf, "SECTION 3 — ADDRESS IN THAILAND", "", cursor);
+  sectionBar(pdf, "SECTION 3 — ADDRESS IN THAILAND", "ส่วนที่ 3 — ที่อยู่ในประเทศไทย", cursor);
 
   pdf.setFillColor(BG_FIELD[0], BG_FIELD[1], BG_FIELD[2]);
   pdf.setDrawColor(LINE_LIGHT[0], LINE_LIGHT[1], LINE_LIGHT[2]);
@@ -178,7 +191,7 @@ export const generateTm2PDF = (
   cursor.y += 20;
 
   // ── SECTION 4: Declaration & Signature ───────────────────────────────
-  sectionBar(pdf, "SECTION 4 — DECLARATION", "", cursor);
+  sectionBar(pdf, "SECTION 4 — DECLARATION", "ส่วนที่ 4 — คำรับรอง", cursor);
 
   setText(pdf, TEXT_MUTED, 8);
   const declaration =

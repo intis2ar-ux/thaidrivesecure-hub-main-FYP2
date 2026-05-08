@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { Application, AiVerificationData } from "@/types";
+import { loadThaiFonts } from "./fonts";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111];
 const RED_TH: [number, number, number] = [165, 28, 28];
@@ -23,7 +24,7 @@ const setText = (
 ) => {
   pdf.setTextColor(color[0], color[1], color[2]);
   pdf.setFontSize(size);
-  pdf.setFont("helvetica", style);
+  pdf.setFont("Sarabun", style);
 };
 
 const box = (
@@ -61,19 +62,32 @@ const sectionBar = (
 };
 
 const ocr = (data: Record<string, { value: string }>, keys: string[]): string => {
+  if (!data) return "";
+  const normalizedData: Record<string, string> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (val?.value) {
+      const normKey = key.toLowerCase().replace(/_/g, " ");
+      normalizedData[normKey] = val.value.trim();
+    }
+  }
+
   for (const k of keys) {
-    const v = data[k]?.value;
-    if (v && v.trim()) return v.trim();
+    const normSearchKey = k.toLowerCase().replace(/_/g, " ");
+    if (normalizedData[normSearchKey]) {
+      return normalizedData[normSearchKey];
+    }
   }
   return "";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-export const generateTm3PDF = (
+export const generateTm3PDF = async (
   application: Application,
   ocrData?: AiVerificationData
-): Blob => {
+): Promise<Blob> => {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  await loadThaiFonts(pdf);
+  
   const cursor: Cursor = { y: 0 };
 
   const vg = ocrData?.vehicleGrantData || {};
@@ -144,7 +158,7 @@ export const generateTm3PDF = (
   const thirdW = (CONTENT_WIDTH - 8) / 3;
 
   // ── SECTION 1: Driver Information ────────────────────────────────────
-  sectionBar(pdf, "SECTION 1 — DRIVER INFORMATION", "", cursor);
+  sectionBar(pdf, "SECTION 1 — DRIVER INFORMATION", "ส่วนที่ 1 — ข้อมูลผู้ขับขี่", cursor);
 
   box(pdf, "Driver Full Name", driverName, MARGIN_X, cursor.y, CONTENT_WIDTH);
   cursor.y += 16;
@@ -156,7 +170,7 @@ export const generateTm3PDF = (
   cursor.y += 16;
 
   // ── SECTION 2: Vehicle Details ────────────────────────────────────────
-  sectionBar(pdf, "SECTION 2 — VEHICLE DETAILS", "", cursor);
+  sectionBar(pdf, "SECTION 2 — VEHICLE DETAILS", "ส่วนที่ 2 — ข้อมูลพาหนะ", cursor);
 
   box(pdf, "Vehicle Type", application.vehicleType || "", MARGIN_X, cursor.y, thirdW);
   box(pdf, "Make", vehicleMake, MARGIN_X + thirdW + 4, cursor.y, thirdW);
@@ -176,7 +190,7 @@ export const generateTm3PDF = (
   cursor.y += 16;
 
   // ── SECTION 3: Entry Details ──────────────────────────────────────────
-  sectionBar(pdf, "SECTION 3 — ENTRY DETAILS", "", cursor);
+  sectionBar(pdf, "SECTION 3 — ENTRY DETAILS", "ส่วนที่ 3 — ข้อมูลการเดินทางเข้า", cursor);
 
   box(pdf, "Border Checkpoint", borderRoute, MARGIN_X, cursor.y, halfW);
   box(pdf, "Date of Entry", entryDate, MARGIN_X + halfW + 4, cursor.y, halfW);
@@ -199,7 +213,7 @@ export const generateTm3PDF = (
   cursor.y += 12;
 
   // ── SECTION 4: Declaration ────────────────────────────────────────────
-  sectionBar(pdf, "SECTION 4 — DECLARATION", "", cursor);
+  sectionBar(pdf, "SECTION 4 — DECLARATION", "ส่วนที่ 4 — คำรับรอง", cursor);
 
   setText(pdf, TEXT_MUTED, 8);
   pdf.text(

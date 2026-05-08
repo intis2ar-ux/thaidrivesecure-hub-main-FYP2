@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { format } from "date-fns";
 import { Application } from "@/types";
+import { loadThaiFonts } from "./fonts";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111];
 const ACCENT_GOLD: [number, number, number] = [196, 148, 20];
@@ -23,7 +24,7 @@ const setText = (
 ) => {
   pdf.setTextColor(color[0], color[1], color[2]);
   pdf.setFontSize(size);
-  pdf.setFont("helvetica", style);
+  pdf.setFont("Sarabun", style);
 };
 
 const infoRow = (
@@ -43,6 +44,8 @@ export const generateTdacQrPDF = async (
   application: Application
 ): Promise<Blob> => {
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  await loadThaiFonts(pdf);
+  
   const cursor: Cursor = { y: 0 };
 
   // ── Header band ─────────────────────────────────────────────────────
