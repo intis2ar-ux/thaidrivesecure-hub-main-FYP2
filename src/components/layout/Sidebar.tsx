@@ -9,7 +9,6 @@ import {
   Package,
   BarChart3,
   FileBarChart,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -122,21 +121,6 @@ export const Sidebar = () => {
 
       {/* Bottom Section */}
       <div className="px-2 py-3 border-t border-sidebar-border space-y-1">
-        {user?.role === "admin" && (
-          <NavLink
-            to="/settings"
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150",
-              location.pathname === "/settings"
-                ? "bg-sidebar-accent text-sidebar-primary font-medium"
-                : "text-sidebar-foreground/65 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
-              collapsed && "justify-center px-0"
-            )}
-          >
-            <Settings className="h-4 w-4 flex-shrink-0" />
-            {!collapsed && <span className="text-[13px]">Settings</span>}
-          </NavLink>
-        )}
 
         {!collapsed && user && (
           <NavLink

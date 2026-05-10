@@ -63,7 +63,7 @@ export const useAnalyticsDashboard = () => {
     const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
 
     const avgOCR = verifications.length > 0
-      ? Math.round(verifications.reduce((s, v) => s + v.overallConfidence, 0) / verifications.length)
+      ? Math.round((verifications.reduce((s, v) => s + v.overallConfidence, 0) / verifications.length) * 100)
       : 0;
 
     const totalRevenue = filteredApps.reduce((s, a) => s + (a.totalPrice || 0), 0);
@@ -139,7 +139,7 @@ export const useAnalyticsDashboard = () => {
       { name: "91-100%", min: 91, max: 100, count: 0, color: "hsl(var(--success))" },
     ];
     verifications.forEach((v) => {
-      const conf = v.overallConfidence;
+      const conf = v.overallConfidence * 100;
       for (const b of buckets) {
         if (conf >= b.min && conf <= b.max) { b.count++; break; }
       }
@@ -168,8 +168,7 @@ export const useAnalyticsDashboard = () => {
       result.push({ id: "1", type: "warning", title: "Approval Rate Declining", description: `Approval rate decreased by ${Math.abs(kpis.trends.approval)}% this week.`, metric: `${kpis.trends.approval}%` });
     }
 
-    // Low OCR confidence
-    const lowOCR = verifications.filter((v) => v.overallConfidence < 70);
+    const lowOCR = verifications.filter((v) => v.overallConfidence < 0.7);
     if (lowOCR.length > 0) {
       const pct = Math.round((lowOCR.length / Math.max(verifications.length, 1)) * 100);
       result.push({ id: "2", type: "critical", title: "Low OCR Confidence Detected", description: `${pct}% of documents have OCR confidence below 70%, which correlates with higher rejection rates.`, metric: `${lowOCR.length} docs` });
@@ -203,9 +202,16 @@ export const useAnalyticsDashboard = () => {
   const tableData = useMemo(() => {
     return filteredApps.map((app) => {
       const verification = verifications.find((v) => v.applicationId === app.id);
+      let conf: number | null = null;
+      if (verification?.overallConfidence != null) {
+        conf = Math.round(verification.overallConfidence * 100);
+      } else if (app.ocrScore != null && app.ocrScore > 0) {
+        conf = app.ocrScore <= 1 ? Math.round(app.ocrScore * 100) : Math.round(app.ocrScore);
+      }
+
       return {
         ...app,
-        ocrConfidence: verification?.overallConfidence ?? null,
+        ocrConfidence: conf,
       };
     });
   }, [filteredApps, verifications]);

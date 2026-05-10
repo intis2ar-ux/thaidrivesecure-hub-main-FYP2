@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Settings } from "lucide-react";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -70,18 +69,6 @@ export const Header = ({ title, subtitle, actions }: HeaderProps) => {
         <div className="flex items-center gap-1.5">
           {actions}
 
-          <NotificationBell />
-
-          {user?.role === "admin" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/settings")}
-              className="text-muted-foreground hover:text-foreground h-9 w-9"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -114,9 +101,7 @@ export const Header = ({ title, subtitle, actions }: HeaderProps) => {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate("/profile")}>Profile</DropdownMenuItem>
-              {user?.role === "admin" && (
-                <DropdownMenuItem onClick={() => navigate("/settings")}>Preferences</DropdownMenuItem>
-              )}
+
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleSignOut}>
                 Sign out

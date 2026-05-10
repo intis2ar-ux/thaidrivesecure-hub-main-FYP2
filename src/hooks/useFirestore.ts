@@ -126,6 +126,9 @@ export const useApplications = () => {
             data.ocr?.score ??
             data.aiVerification?.overallConfidence ??
             0;
+          if (ocrScore > 0 && ocrScore <= 1) {
+            ocrScore = ocrScore * 100;
+          }
           if (mappedStatus === "approved" && (!ocrScore || ocrScore < 70)) {
             ocrScore = 85;
           }
@@ -459,7 +462,16 @@ export const useAIVerifications = () => {
     }
   };
 
-  return { verifications, loading, error, updateVerification, processDocumentAI };
+  const deleteVerification = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "ai_verifications", id));
+    } catch (err: any) {
+      console.error("Error deleting verification:", err);
+      throw err;
+    }
+  };
+
+  return { verifications, loading, error, updateVerification, deleteVerification, processDocumentAI };
 };
 
 // Payments Hook - Derives payments from orders collection

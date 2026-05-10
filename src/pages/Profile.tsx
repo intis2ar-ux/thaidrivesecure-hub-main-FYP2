@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { format } from "date-fns";
 import {
@@ -21,7 +20,6 @@ import {
   Phone,
   Calendar,
   Shield,
-  Key,
   LogOut,
   Loader2,
   Save,
@@ -45,7 +43,6 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     name: "",
     email: "",
@@ -126,27 +123,6 @@ const Profile = () => {
     }
   };
 
-  const handlePasswordReset = async () => {
-    if (!profileData.email) return;
-
-    setIsResettingPassword(true);
-    try {
-      await sendPasswordResetEmail(auth, profileData.email);
-      toast({
-        title: "Password Reset Email Sent",
-        description: "Check your email for instructions to reset your password.",
-      });
-    } catch (error: any) {
-      console.error("Error sending password reset:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send password reset email.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsResettingPassword(false);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -438,7 +414,7 @@ const Profile = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-warning" />
+                <Shield className="h-5 w-5 text-warning" />
                 Security
               </CardTitle>
               <CardDescription>
@@ -446,31 +422,6 @@ const Profile = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                <div>
-                  <p className="font-medium">Change Password</p>
-                  <p className="text-sm text-muted-foreground">
-                    Send a password reset link to your email
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={handlePasswordReset}
-                  disabled={isResettingPassword}
-                >
-                  {isResettingPassword ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Key className="h-4 w-4 mr-2" />
-                      Reset Password
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              <Separator />
-
               <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5">
                 <div>
                   <p className="font-medium text-destructive">Log Out</p>

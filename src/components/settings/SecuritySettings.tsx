@@ -57,48 +57,8 @@ export const SecuritySettings = ({
   isSaving,
 }: SecuritySettingsProps) => {
   const { toast } = useToast();
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    current: "",
-    new: "",
-    confirm: "",
-  });
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const handlePasswordChange = async () => {
-    if (passwordForm.new !== passwordForm.confirm) {
-      toast({
-        title: "Password Mismatch",
-        description: "New passwords do not match.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (passwordForm.new.length < 8) {
-      toast({
-        title: "Weak Password",
-        description: "Password must be at least 8 characters long.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsChangingPassword(true);
-    // Simulate password change for FYP prototype
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    toast({
-      title: "Password Updated",
-      description: "Your password has been changed successfully.",
-    });
-
-    setPasswordForm({ current: "", new: "", confirm: "" });
-    setShowPasswordDialog(false);
-    setIsChangingPassword(false);
-    setShowLogoutDialog(true);
-  };
 
   const handleForceLogout = () => {
     toast({
@@ -180,26 +140,6 @@ export const SecuritySettings = ({
 
         <Separator />
 
-        {/* Change Password */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-start gap-4">
-            <div className="p-2 rounded-lg bg-warning/10">
-              <Key className="h-5 w-5 text-warning" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-base font-medium">Change Password</Label>
-              <p className="text-sm text-muted-foreground">
-                Update your password with current password verification
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" onClick={() => setShowPasswordDialog(true)}>
-            Change Password
-          </Button>
-        </div>
-
-        <Separator />
-
         {/* Force Logout All Sessions */}
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-4">
@@ -255,69 +195,6 @@ export const SecuritySettings = ({
           </Button>
         </div>
       </CardContent>
-
-      {/* Change Password Dialog */}
-      <AlertDialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Change Password</AlertDialogTitle>
-            <AlertDialogDescription>
-              Enter your current password and choose a new secure password.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="current-password">Current Password</Label>
-              <Input
-                id="current-password"
-                type="password"
-                value={passwordForm.current}
-                onChange={(e) =>
-                  setPasswordForm((prev) => ({ ...prev, current: e.target.value }))
-                }
-                placeholder="Enter current password"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                value={passwordForm.new}
-                onChange={(e) =>
-                  setPasswordForm((prev) => ({ ...prev, new: e.target.value }))
-                }
-                placeholder="Enter new password (min 8 characters)"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm New Password</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={passwordForm.confirm}
-                onChange={(e) =>
-                  setPasswordForm((prev) => ({ ...prev, confirm: e.target.value }))
-                }
-                placeholder="Confirm new password"
-              />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handlePasswordChange}
-              disabled={isChangingPassword || !passwordForm.current || !passwordForm.new}
-              className="bg-accent hover:bg-accent/90"
-            >
-              {isChangingPassword ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
-              Update Password
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Force Logout Dialog */}
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>

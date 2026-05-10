@@ -147,14 +147,14 @@ export const ReviewActionsPanel = ({
           <div className="space-y-2">
             <Label className="text-sm font-medium flex items-center gap-2">
               <MessageSquare className="h-3 w-3" />
-              Reviewer Notes
+              Reviewer Notes *
             </Label>
             <Textarea
-              placeholder="Add additional notes for the rejection..."
+              placeholder="Please provide a reason for the rejection..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="resize-none"
+              className={cn("resize-none", !notes.trim() ? "border-destructive/50" : "")}
             />
           </div>
 
@@ -162,7 +162,7 @@ export const ReviewActionsPanel = ({
             <Button
               variant="destructive"
               onClick={handleReject}
-              disabled={!selectedReason || isLoading}
+              disabled={!selectedReason || !notes.trim() || isLoading}
               className="flex-1"
             >
               Confirm Rejection

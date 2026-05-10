@@ -290,6 +290,7 @@ export const PaymentDetailDrawer = ({
                     value={staffNotes}
                     onChange={(e) => setStaffNotes(e.target.value)}
                     rows={3}
+                    className={actionMode !== "verify" && !staffNotes.trim() ? "border-destructive/50" : ""}
                   />
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={resetAction}>
@@ -304,6 +305,7 @@ export const PaymentDetailDrawer = ({
                           : ""
                       }`}
                       onClick={handleAction}
+                      disabled={actionMode !== "verify" && !staffNotes.trim()}
                     >
                       Confirm
                     </Button>

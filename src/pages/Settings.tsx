@@ -9,12 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
-import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { SystemSettings } from "@/components/settings/SystemSettings";
 import { TeamManagement } from "@/components/settings/TeamManagement";
 import {
   Shield,
-  Bell,
   Database,
   Users,
   Loader2,
@@ -33,15 +31,6 @@ interface AdminSettings {
     lastLogin?: Date;
     lastLoginDevice?: string;
   };
-  notifications: {
-    emailNotifications: boolean;
-    newApplicationAlerts: boolean;
-    applicationStatusAlerts: boolean;
-    paymentFailureAlerts: boolean;
-    paymentSuccessAlerts: boolean;
-    lowConfidenceAIAlerts: boolean;
-    aiSystemErrorAlerts: boolean;
-  };
   system: {
     aiConfidenceThreshold: number;
     queuePriorityThreshold: number;
@@ -49,29 +38,7 @@ interface AdminSettings {
   };
 }
 
-const getDefaultNotifications = (role: string): AdminSettings["notifications"] => {
-  if (role === "admin") {
-    return {
-      emailNotifications: true,
-      newApplicationAlerts: true,
-      applicationStatusAlerts: true,
-      paymentFailureAlerts: true,
-      paymentSuccessAlerts: true,
-      lowConfidenceAIAlerts: true,
-      aiSystemErrorAlerts: true,
-    };
-  }
-  // Staff defaults
-  return {
-    emailNotifications: true,
-    newApplicationAlerts: true,
-    applicationStatusAlerts: true,
-    paymentFailureAlerts: false,
-    paymentSuccessAlerts: false,
-    lowConfidenceAIAlerts: true,
-    aiSystemErrorAlerts: false,
-  };
-};
+
 
 const defaultSettings: AdminSettings = {
   profile: {
@@ -84,7 +51,6 @@ const defaultSettings: AdminSettings = {
     lastLogin: new Date(),
     lastLoginDevice: "Chrome on Windows",
   },
-  notifications: getDefaultNotifications("admin"),
   system: {
     aiConfidenceThreshold: 0.85,
     queuePriorityThreshold: 100,
@@ -121,10 +87,6 @@ const Settings = () => {
               lastLogin: data.security?.lastLogin?.toDate() ?? new Date(),
               lastLoginDevice: data.security?.lastLoginDevice ?? "Unknown device",
             },
-            notifications: {
-              ...getDefaultNotifications(user?.role || "staff"),
-              ...data.notifications,
-            },
             system: {
               aiConfidenceThreshold: data.system?.aiConfidenceThreshold ?? 0.85,
               queuePriorityThreshold: data.system?.queuePriorityThreshold ?? 100,
@@ -139,7 +101,6 @@ const Settings = () => {
               name: user?.name || "",
               email: user?.email || "",
             },
-            notifications: getDefaultNotifications(user?.role || "staff"),
           });
         }
       } catch (error) {
@@ -200,13 +161,6 @@ const Settings = () => {
     }));
   };
 
-  const updateNotifications = (field: string, value: boolean) => {
-    setSettings((prev) => ({
-      ...prev,
-      notifications: { ...prev.notifications, [field]: value },
-    }));
-  };
-
   const updateSystem = (field: string, value: number | boolean) => {
     setSettings((prev) => ({
       ...prev,
@@ -214,16 +168,7 @@ const Settings = () => {
     }));
   };
 
-  const applyNotificationDefaults = () => {
-    setSettings((prev) => ({
-      ...prev,
-      notifications: getDefaultNotifications(user?.role || "staff"),
-    }));
-    toast({
-      title: "Defaults Applied",
-      description: `${user?.role === "admin" ? "Admin" : "Staff"} notification presets have been applied.`,
-    });
-  };
+
 
 
   // Only admin can access this page
@@ -274,10 +219,6 @@ const Settings = () => {
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Security</span>
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex items-center gap-2 py-2.5">
-              <Bell className="h-4 w-4" />
-              <span className="hidden sm:inline">Alerts</span>
-            </TabsTrigger>
             <TabsTrigger value="system" className="flex items-center gap-2 py-2.5">
               <Database className="h-4 w-4" />
               <span className="hidden sm:inline">System</span>
@@ -298,23 +239,11 @@ const Settings = () => {
             />
           </TabsContent>
 
-          {/* Notification Settings */}
-          <TabsContent value="notifications">
-            <NotificationSettings
-              notifications={settings.notifications}
-              userRole={user?.role || "admin"}
-              onUpdate={updateNotifications}
-              onSave={() => saveSettings("notifications")}
-              onApplyDefaults={applyNotificationDefaults}
-              isSaving={isSaving}
-            />
-          </TabsContent>
+
 
           {/* System Settings */}
           <TabsContent value="system">
             <SystemSettings
-              system={settings.system}
-              onUpdate={updateSystem}
               onSave={() => saveSettings("system")}
               isSaving={isSaving}
             />

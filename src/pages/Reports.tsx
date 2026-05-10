@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -18,7 +19,7 @@ import {
   Clock, Brain, XCircle, DollarSign, TrendingUp, AlertTriangle, FileText, Loader2,
 } from "lucide-react";
 import { useReports, useApplications, usePayments, useAIVerifications } from "@/hooks/useFirestore";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, startOfDay, endOfDay, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useRBAC } from "@/hooks/useRBAC";
@@ -44,14 +45,24 @@ const Reports = () => {
 
   const loading = reportsLoading || appsLoading || paymentsLoading || verificationsLoading;
 
+  const isWithinDateRange = (dateStr: string | Date | number) => {
+    if (!dateRange.from || !dateRange.to) return true;
+    const date = new Date(dateStr);
+    return date >= startOfDay(dateRange.from) && date <= endOfDay(dateRange.to);
+  };
+
+  const filteredApps = useMemo(() => applications.filter(a => isWithinDateRange(a.createdAt)), [applications, dateRange]);
+  const filteredPayments = useMemo(() => payments.filter(p => isWithinDateRange(p.createdAt)), [payments, dateRange]);
+  const filteredVerifications = useMemo(() => verifications.filter(v => isWithinDateRange(v.timestamp)), [verifications, dateRange]);
+
   // --- Computed report data (unchanged logic) ---
   const processingTimeData = useMemo(() => {
-    const completedApps = applications.filter(app => app.status === "approved");
+    const completedApps = filteredApps.filter(app => app.status === "approved");
     const avgDays = completedApps.length > 0
       ? completedApps.reduce((sum, app) => sum + differenceInDays(new Date(), app.createdAt), 0) / completedApps.length
       : 0;
-    const pendingApps = applications.filter(a => a.status === "pending");
-    const rejectedApps = applications.filter(a => a.status === "rejected");
+    const pendingApps = filteredApps.filter(a => a.status === "pending");
+    const rejectedApps = filteredApps.filter(a => a.status === "rejected");
     const avgPendingDays = pendingApps.length > 0
       ? pendingApps.reduce((sum, a) => sum + differenceInDays(new Date(), a.createdAt), 0) / pendingApps.length : 0;
     const avgRejectedDays = rejectedApps.length > 0
@@ -61,16 +72,16 @@ const Reports = () => {
       { status: "Approved", count: completedApps.length, avgDays: Number(avgDays.toFixed(1)) },
       { status: "Rejected", count: rejectedApps.length, avgDays: Number(avgRejectedDays.toFixed(1)) },
     ];
-    return { averageDays: avgDays.toFixed(1), byStatus, total: applications.length };
-  }, [applications]);
+    return { averageDays: avgDays.toFixed(1), byStatus, total: filteredApps.length };
+  }, [filteredApps]);
 
   const aiMetricsData = useMemo(() => {
-    const total = verifications.length;
-    const autoVerified = verifications.filter(v => v.overallConfidence >= 0.85 && v.verifiedByAI).length;
-    const manualReview = verifications.filter(v => v.overallConfidence >= 0.7 && v.overallConfidence < 0.85).length;
-    const flagged = verifications.filter(v => v.overallConfidence < 0.7).length;
-    const overridden = verifications.filter(v => v.reviewedByStaff && !v.verifiedByAI).length;
-    const avgConfidence = total > 0 ? verifications.reduce((sum, v) => sum + v.overallConfidence, 0) / total : 0;
+    const total = filteredVerifications.length;
+    const autoVerified = filteredVerifications.filter(v => v.overallConfidence >= 0.85 && v.verifiedByAI).length;
+    const manualReview = filteredVerifications.filter(v => v.overallConfidence >= 0.7 && v.overallConfidence < 0.85).length;
+    const flagged = filteredVerifications.filter(v => v.overallConfidence < 0.7).length;
+    const overridden = filteredVerifications.filter(v => v.reviewedByStaff && !v.verifiedByAI).length;
+    const avgConfidence = total > 0 ? filteredVerifications.reduce((sum, v) => sum + v.overallConfidence, 0) / total : 0;
     return {
       total, autoVerified,
       autoVerificationRate: total > 0 ? ((autoVerified / total) * 100).toFixed(1) : 0,
@@ -78,10 +89,10 @@ const Reports = () => {
       overrideRate: total > 0 ? ((overridden / total) * 100).toFixed(1) : 0,
       avgConfidence: (avgConfidence * 100).toFixed(1),
     };
-  }, [verifications]);
+  }, [filteredVerifications]);
 
   const rejectionData = useMemo(() => {
-    const rejectedApps = applications.filter(a => a.status === "rejected");
+    const rejectedApps = filteredApps.filter(a => a.status === "rejected");
     const total = rejectedApps.length;
     if (total === 0) return [];
     const reasons: Record<string, number> = {};
@@ -92,10 +103,10 @@ const Reports = () => {
     return Object.entries(reasons).map(([reason, count]) => ({
       reason, count, percentage: total > 0 ? Math.round((count / total) * 100) : 0,
     }));
-  }, [applications]);
+  }, [filteredApps]);
 
   const revenueData = useMemo(() => {
-    const paidPayments = payments.filter(p => p.status === "paid");
+    const paidPayments = filteredPayments.filter(p => p.status === "paid");
     const byMethod: Record<string, { revenue: number; count: number }> = {};
     paidPayments.forEach(p => {
       const method = p.method || "Other";
@@ -108,11 +119,11 @@ const Reports = () => {
       service: method.charAt(0).toUpperCase() + method.slice(1),
       revenue: data.revenue, count: data.count, color: colors[i % colors.length],
     }));
-  }, [payments]);
+  }, [filteredPayments]);
 
   const queueData = useMemo(() => {
-    const paidApps = payments.filter(p => p.status === "paid");
-    const unpaidApps = payments.filter(p => p.status !== "paid");
+    const paidApps = filteredPayments.filter(p => p.status === "paid");
+    const unpaidApps = filteredPayments.filter(p => p.status !== "paid");
     const paidAvgWait = paidApps.length > 0
       ? paidApps.reduce((sum, p) => sum + differenceInDays(new Date(), p.createdAt), 0) / paidApps.length : 0;
     const unpaidAvgWait = unpaidApps.length > 0
@@ -121,22 +132,32 @@ const Reports = () => {
       priority: paidApps.length, delayed: unpaidApps.length,
       priorityAvgWait: Number(paidAvgWait.toFixed(1)), delayedAvgWait: Number(unpaidAvgWait.toFixed(1)),
     };
-  }, [payments]);
+  }, [filteredPayments]);
 
   // --- Actions ---
-  const handleGenerateReport = async () => {
+  const handleGenerateReport = async (rangeType: "weekly" | "monthly" | "all" | "custom") => {
     if (!hasPermission("generate", "reports")) {
       toast({ title: "Permission Denied", description: "Only administrators can generate reports.", variant: "destructive" });
       return;
     }
+
+    const today = new Date();
+    if (rangeType === "weekly") {
+      setDateRange({ from: subDays(today, 7), to: today });
+    } else if (rangeType === "monthly") {
+      setDateRange({ from: subDays(today, 30), to: today });
+    } else if (rangeType === "all") {
+      setDateRange({ from: undefined, to: undefined });
+    }
+
     setIsGenerating(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     setIsGenerating(false);
-    toast({ title: "Report Generated", description: "Your report has been generated and is ready for download." });
+    toast({ title: "Report Generated", description: `Your ${rangeType} report has been generated and is ready for download.` });
   };
 
-  const getReportData = () => {
-    switch (reportType) {
+  const getReportData = (type: string = reportType) => {
+    switch (type) {
       case "processing_time":
         return { title: "Application Processing Time Report", headers: ["Status", "Count", "Avg Days"],
           rows: processingTimeData.byStatus.map(i => [i.status, i.count.toString(), i.avgDays.toString()]),
@@ -181,6 +202,42 @@ const Reports = () => {
     const printContent = `<!DOCTYPE html><html><head><title>${data.title}</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#333}h1{color:#1a1a1a;border-bottom:2px solid #1B3B6F;padding-bottom:10px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #ddd;padding:12px;text-align:left}th{background-color:#1B3B6F;color:white}tr:nth-child(even){background-color:#f9f9f9}.summary{background:#E6F3F9;padding:15px;border-radius:8px;margin:20px 0}.footer{margin-top:30px;color:#666;font-size:12px}</style></head><body><h1>${data.title}</h1><p>ThaiDriveSecure Dashboard</p><table><thead><tr>${data.headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${data.rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table><div class="summary"><strong>Summary:</strong> ${data.summary}</div><div class="footer">Generated on ${format(new Date(),"PPpp")}</div></body></html>`;
     const w = window.open("","_blank");
     if(w){w.document.write(printContent);w.document.close();w.onload=()=>{w.print()}}
+  };
+
+  const handleDownloadAll = (formatType: "pdf" | "csv") => {
+    if (!hasPermission("download", "reports")) {
+      toast({ title: "Permission Denied", description: "Only administrators can download reports.", variant: "destructive" }); return;
+    }
+    const types = ["processing_time", "ai_accuracy", "rejections", "revenue", "queue"];
+    const allData = types.map(t => getReportData(t));
+    
+    if (formatType === "csv") {
+      let csvContent = "";
+      allData.forEach(data => {
+          csvContent += [data.title, "", data.headers.join(","), ...data.rows.map(r => r.join(",")), "", data.summary, "", ""].join("\n");
+      });
+      csvContent += `Generated: ${format(new Date(), "PPpp")}`;
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a"); link.href = url;
+      link.download = `comprehensive_report_${format(new Date(), "yyyy-MM-dd")}.csv`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+    } else {
+      let tablesHtml = allData.map(data => `
+        <h2>${data.title}</h2>
+        <table>
+          <thead><tr>${data.headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+          <tbody>${data.rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+        <div class="summary"><strong>Summary:</strong> ${data.summary}</div>
+        <br/>
+      `).join("");
+
+      const printContent = `<!DOCTYPE html><html><head><title>Comprehensive Operational Report</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#333}h1,h2{color:#1a1a1a;border-bottom:2px solid #1B3B6F;padding-bottom:10px}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #ddd;padding:12px;text-align:left}th{background-color:#1B3B6F;color:white}tr:nth-child(even){background-color:#f9f9f9}.summary{background:#E6F3F9;padding:15px;border-radius:8px;margin:20px 0}.footer{margin-top:30px;color:#666;font-size:12px}</style></head><body><h1>Comprehensive Operational Report</h1><p>ThaiDriveSecure Dashboard</p>${tablesHtml}<div class="footer">Generated on ${format(new Date(),"PPpp")}</div></body></html>`;
+      const w = window.open("","_blank");
+      if(w){w.document.write(printContent);w.document.close();w.onload=()=>{w.print()}}
+    }
+    toast({ title: "Download Complete", description: `Comprehensive ${formatType.toUpperCase()} report has been generated.` });
   };
 
   const handleDownload = (reportId: string, formatType: "pdf"|"csv") => {
@@ -278,9 +335,29 @@ const Reports = () => {
                   </PopoverContent>
                 </Popover>
                 <ProtectedButton action="generate" resource="reports">
-                  <Button size="sm" className="h-9" onClick={handleGenerateReport} disabled={isGenerating}>
-                    {isGenerating ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Generating...</> : <><FileBarChart className="h-3.5 w-3.5 mr-1.5" /> Generate Report</>}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" className="h-9" disabled={isGenerating}>
+                        {isGenerating ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Generating...</> : <><FileBarChart className="h-3.5 w-3.5 mr-1.5" /> Generate Report</>}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleGenerateReport("weekly")}>
+                        Weekly Report (Last 7 Days)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleGenerateReport("monthly")}>
+                        Monthly Report (Last 30 Days)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleGenerateReport("all")}>
+                        All Time Report
+                      </DropdownMenuItem>
+                      {dateRange.from && dateRange.to && (
+                        <DropdownMenuItem onClick={() => handleGenerateReport("custom")}>
+                          Custom Date Range Report
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </ProtectedButton>
               </div>
             </CardContent>
@@ -288,23 +365,43 @@ const Reports = () => {
 
           {/* Report Tabs */}
           <Tabs value={reportType} onValueChange={setReportType} className="space-y-6">
-            <TabsList className="grid w-fit grid-cols-5 gap-1 h-auto p-1">
-              <TabsTrigger value="processing_time" className="text-xs gap-1.5 px-3 py-2">
-                <Clock className="h-3.5 w-3.5" /> Processing
-              </TabsTrigger>
-              <TabsTrigger value="ai_accuracy" className="text-xs gap-1.5 px-3 py-2">
-                <Brain className="h-3.5 w-3.5" /> AI Accuracy
-              </TabsTrigger>
-              <TabsTrigger value="rejections" className="text-xs gap-1.5 px-3 py-2">
-                <XCircle className="h-3.5 w-3.5" /> Rejections
-              </TabsTrigger>
-              <TabsTrigger value="revenue" className="text-xs gap-1.5 px-3 py-2">
-                <DollarSign className="h-3.5 w-3.5" /> Revenue
-              </TabsTrigger>
-              <TabsTrigger value="queue" className="text-xs gap-1.5 px-3 py-2">
-                <TrendingUp className="h-3.5 w-3.5" /> Queue
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <TabsList className="grid w-fit grid-cols-5 gap-1 h-auto p-1">
+                <TabsTrigger value="processing_time" className="text-xs gap-1.5 px-3 py-2">
+                  <Clock className="h-3.5 w-3.5" /> Processing
+                </TabsTrigger>
+                <TabsTrigger value="ai_accuracy" className="text-xs gap-1.5 px-3 py-2">
+                  <Brain className="h-3.5 w-3.5" /> AI Accuracy
+                </TabsTrigger>
+                <TabsTrigger value="rejections" className="text-xs gap-1.5 px-3 py-2">
+                  <XCircle className="h-3.5 w-3.5" /> Rejections
+                </TabsTrigger>
+                <TabsTrigger value="revenue" className="text-xs gap-1.5 px-3 py-2">
+                  <DollarSign className="h-3.5 w-3.5" /> Revenue
+                </TabsTrigger>
+                <TabsTrigger value="queue" className="text-xs gap-1.5 px-3 py-2">
+                  <TrendingUp className="h-3.5 w-3.5" /> Queue
+                </TabsTrigger>
+              </TabsList>
+              
+              <ProtectedButton action="download" resource="reports">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary transition-colors">
+                      <Download className="h-4 w-4 mr-2" /> Comprehensive Report
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleDownloadAll("pdf")}>
+                      <FileText className="h-4 w-4 mr-2 text-muted-foreground" /> Download as PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDownloadAll("csv")}>
+                      <FileBarChart className="h-4 w-4 mr-2 text-muted-foreground" /> Download as CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ProtectedButton>
+            </div>
 
             {/* Processing Time */}
             <TabsContent value="processing_time">

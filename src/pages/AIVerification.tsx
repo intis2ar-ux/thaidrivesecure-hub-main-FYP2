@@ -10,6 +10,16 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -29,6 +39,7 @@ import {
   Image,
   History,
   ClipboardList,
+  Trash2,
 } from "lucide-react";
 import { useAIVerifications, useApplications } from "@/hooks/useFirestore";
 import { format } from "date-fns";
@@ -47,11 +58,12 @@ import { ReviewActionsPanel } from "@/components/verification/ReviewActionsPanel
 const AIVerification = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { verifications, loading, updateVerification } = useAIVerifications();
+  const { verifications, loading, updateVerification, deleteVerification } = useAIVerifications();
   const { applications, updateApplicationStatus } = useApplications();
   const [selectedVerification, setSelectedVerification] = useState<AIVerificationType | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isDocumentPreviewOpen, setIsDocumentPreviewOpen] = useState(false);
+  const [verificationToDelete, setVerificationToDelete] = useState<AIVerificationType | null>(null);
 
   const pendingReview = verifications.filter((v) => !v.reviewedByStaff);
   const lowConfidence = verifications.filter((v) => v.overallConfidence < 0.7);
@@ -129,7 +141,10 @@ const AIVerification = () => {
       });
 
       // Update application status to rejected
-      await updateApplicationStatus(selectedVerification.applicationId, "rejected");
+      await updateApplicationStatus(selectedVerification.applicationId, "rejected", {
+        notes,
+        performedBy: user?.name || "Unknown",
+      });
 
       toast({
         title: "Document Rejected",
@@ -174,6 +189,25 @@ const AIVerification = () => {
         title: "Error",
         description: "Failed to request re-upload.",
         variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!verificationToDelete) return;
+
+    try {
+      await deleteVerification(verificationToDelete.id);
+      toast({
+        title: "Verification Deleted",
+        description: "The document verification record has been successfully deleted.",
+      });
+      setVerificationToDelete(null);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: err.message || "An error occurred while deleting the verification.",
       });
     }
   };
@@ -429,6 +463,18 @@ const AIVerification = () => {
                               <Eye className="h-4 w-4 mr-1" />
                               Review
                             </Button>
+                            {user?.role === "admin" && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVerificationToDelete(ver);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -440,6 +486,27 @@ const AIVerification = () => {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!verificationToDelete} onOpenChange={(open) => !open && setVerificationToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the AI verification
+              record for Application <strong>{verificationToDelete?.applicationId}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Document Preview Modal */}
       <DocumentReviewModal

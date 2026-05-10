@@ -226,6 +226,14 @@ const Applications = () => {
     e?: React.MouseEvent,
   ) => {
     e?.stopPropagation();
+    
+    if (target === "rejected") {
+      setEditingApp(app);
+      setNewStatus("rejected");
+      setIsConfirmOpen(true);
+      return;
+    }
+
     try {
       await updateApplicationStatus(app.id, target, {
         previousStatus: app.status,
@@ -813,12 +821,15 @@ const Applications = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="py-2 space-y-2">
-              <label className="text-sm font-medium text-foreground">Notes (optional)</label>
+              <label className="text-sm font-medium text-foreground">
+                {newStatus === "rejected" ? "Notes (required for rejection)" : "Notes (optional)"}
+              </label>
               <Textarea
-                placeholder={newStatus === "rejected" ? "Reason for rejection..." : "Any notes about this approval..."}
+                placeholder={newStatus === "rejected" ? "Please provide a reason for rejecting this application..." : "Any notes about this approval..."}
                 value={statusNotes}
                 onChange={(e) => setStatusNotes(e.target.value)}
                 rows={3}
+                className={newStatus === "rejected" && !statusNotes.trim() ? "border-destructive/50" : ""}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -828,6 +839,7 @@ const Applications = () => {
               <Button
                 variant={newStatus === "rejected" ? "destructive" : "default"}
                 onClick={handleUpdateStatus}
+                disabled={newStatus === "rejected" && !statusNotes.trim()}
               >
                 {newStatus === "approved" ? "Confirm Approval" : "Confirm Rejection"}
               </Button>
@@ -887,12 +899,15 @@ const Applications = () => {
             </DialogHeader>
             {bulkAction !== "delete" && (
               <div className="py-2 space-y-2">
-                <label className="text-sm font-medium text-foreground">Notes (optional)</label>
+                <label className="text-sm font-medium text-foreground">
+                  {bulkAction === "reject" ? "Notes (required for rejection)" : "Notes (optional)"}
+                </label>
                 <Textarea
                   placeholder={`Reason for bulk ${bulkAction}...`}
                   value={bulkNotes}
                   onChange={(e) => setBulkNotes(e.target.value)}
                   rows={3}
+                  className={bulkAction === "reject" && !bulkNotes.trim() ? "border-destructive/50" : ""}
                 />
               </div>
             )}
@@ -910,7 +925,7 @@ const Applications = () => {
               <Button
                 variant={bulkAction === "approve" ? "default" : "destructive"}
                 onClick={performBulkAction}
-                disabled={bulkProcessing}
+                disabled={bulkProcessing || (bulkAction === "reject" && !bulkNotes.trim())}
               >
                 {bulkProcessing ? "Processing..." : `Confirm ${bulkAction}`}
               </Button>

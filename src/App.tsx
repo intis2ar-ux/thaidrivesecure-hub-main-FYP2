@@ -14,7 +14,7 @@ import Addons from "./pages/Addons";
 import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
 
-import Settings from "./pages/Settings";
+
 import Profile from "./pages/Profile";
 
 
@@ -43,7 +43,7 @@ const App = () => (
             
             
             
-            <Route path="/settings" element={<Settings />} />
+
             <Route path="/profile" element={<Profile />} />
             <Route path="/order-status/:orderId" element={<OrderStatus />} />
             <Route path="*" element={<NotFound />} />
