@@ -38,7 +38,7 @@ import { ApplicationStatus } from "@/types";
 
 // Status flow steps for the progress indicator
 const STATUS_STEPS: { key: ApplicationStatus; label: string; icon: React.ElementType; description: string }[] = [
-  { key: "applied", label: "Applied", icon: Upload, description: "Receipt uploaded" },
+  { key: "applied", label: "Applied", icon: Upload, description: "Application submitted" },
   { key: "pending", label: "Pending", icon: Clock, description: "Awaiting review" },
   { key: "approved", label: "Approved", icon: Shield, description: "Application approved" },
   { key: "completed", label: "Completed", icon: CheckCircle2, description: "Insurance ready" },
@@ -64,12 +64,10 @@ const OrderStatus = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const hasReceipt = !!order?.receiptUrl;
   const isCompleted = order?.status === "completed" || order?.status === "document_generated";
   const isRejected = order?.status === "rejected";
   const currentStepIndex = order ? getStepIndex(order.status) : -1;
 
-  // File selection handler
   const handleFileSelect = useCallback((file: File) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
     if (!allowed.includes(file.type)) {
@@ -81,14 +79,9 @@ const OrderStatus = () => {
       return;
     }
     setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
-      setPreviewUrl(URL.createObjectURL(file));
-    } else {
-      setPreviewUrl(null);
-    }
+    setPreviewUrl(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
   }, []);
 
-  // Drag & Drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -123,7 +116,6 @@ const OrderStatus = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Submit receipt
   const handleSubmit = async () => {
     if (!selectedFile || !orderId) return;
     setUploading(true);
@@ -321,7 +313,7 @@ const OrderStatus = () => {
         </Card>
 
         {/* Receipt Upload Section */}
-        {!hasReceipt && !isCompleted && !isRejected && (
+        {false && (
           <Card className="border border-border shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -429,7 +421,7 @@ const OrderStatus = () => {
         )}
 
         {/* Receipt Already Uploaded */}
-        {hasReceipt && !isCompleted && (
+        {false && (
           <Card className="border border-border shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">

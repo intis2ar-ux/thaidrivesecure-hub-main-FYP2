@@ -24,6 +24,8 @@ interface ReviewActionsPanelProps {
   onRequestReUpload: (notes: string) => Promise<void>;
   isDisabled?: boolean;
   isReviewed?: boolean;
+  documentType?: string;
+  fieldCount?: number;
 }
 
 const rejectionReasons: { value: RejectionReason; label: string }[] = [
@@ -41,6 +43,8 @@ export const ReviewActionsPanel = ({
   onRequestReUpload,
   isDisabled = false,
   isReviewed = false,
+  documentType,
+  fieldCount,
 }: ReviewActionsPanelProps) => {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [selectedReason, setSelectedReason] = useState<RejectionReason | "">("");
@@ -93,7 +97,14 @@ export const ReviewActionsPanel = ({
 
   return (
     <div className="space-y-4">
-      <h4 className="font-semibold text-sm">Review Actions</h4>
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold text-sm">Review Actions</h4>
+        {documentType === "vehicle_registration" && fieldCount === 14 && !isReviewed && (
+          <span className="text-[10px] bg-success/10 text-success px-2 py-0.5 rounded-full font-medium border border-success/20 animate-pulse">
+            Meets Auto-Approval Criteria
+          </span>
+        )}
+      </div>
 
       {!showRejectForm ? (
         <div className="grid grid-cols-2 gap-2">

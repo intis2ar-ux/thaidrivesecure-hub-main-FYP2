@@ -6,7 +6,7 @@ import {
 import { toast } from "sonner";
 import { Application } from "@/types";
 import { Button } from "@/components/ui/button";
-import { useApplications, usePayments } from "@/hooks/useFirestore";
+import { useAIVerifications, useApplications, usePayments } from "@/hooks/useFirestore";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
@@ -26,30 +26,58 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
   const { user } = useAuth();
   const { generateAndStoreInsuranceDocument } = useApplications();
   const { payments } = usePayments();
+  const { verifications } = useAIVerifications();
   const [loading, setLoading] = useState(false);
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
-  // Any verified/rejected/update-requested counts as staff acted
-  const staffActedOnPayment = useMemo(() => {
+  const paymentVerified = useMemo(() => {
     const match = payments.find((p) => p.applicationId === application.id);
     if (!match) return false;
-    return match.verificationStatus !== "pending_verification";
+    return match.verificationStatus === "verified";
   }, [payments, application.id]);
 
+  const hasPassportDocument = !!application.documents?.passportUrls?.length;
+  const hasVehicleGrantDocument = !!application.documents?.vehicleGrantUrl;
+
+  const aiAnalysisStatus = useMemo(() => {
+    const appVerifications = verifications.filter((verification) => verification.applicationId === application.id);
+    const hasPassportAnalysis =
+      !hasPassportDocument ||
+      appVerifications.some((verification) => String(verification.documentType).toLowerCase() === "passport");
+    const hasVehicleGrantAnalysis =
+      !hasVehicleGrantDocument ||
+      appVerifications.some((verification) =>
+        ["vehicle_grant", "vehicle_registration"].includes(String(verification.documentType).toLowerCase())
+      );
+    const missing = [
+      hasPassportDocument && !hasPassportAnalysis ? "Passport" : "",
+      hasVehicleGrantDocument && !hasVehicleGrantAnalysis ? "Vehicle Grant" : "",
+    ].filter(Boolean);
+
+    return {
+      complete: (hasPassportDocument || hasVehicleGrantDocument) && hasPassportAnalysis && hasVehicleGrantAnalysis,
+      missing,
+    };
+  }, [application.id, hasPassportDocument, hasVehicleGrantDocument, verifications]);
+
   const canGenerate =
-    staffActedOnPayment &&
-    application.paymentStatus === "paid" &&
+    paymentVerified &&
+    aiAnalysisStatus.complete &&
     (application.ocrScore ?? 0) >= 70 &&
     (application.status === "approved" ||
       application.status === "processing" ||
       application.status === "document_generated");
 
   const blockReason = useMemo(() => {
-    if (!staffActedOnPayment) return "Awaiting payment review in the Payments page.";
-    if (application.paymentStatus !== "paid") return "Payment has not been confirmed as paid.";
+    if (!paymentVerified) return "Awaiting payment confirmation in the Payments page.";
+    if (!aiAnalysisStatus.complete) {
+      return aiAnalysisStatus.missing.length > 0
+        ? `Run AI analysis for ${aiAnalysisStatus.missing.join(" and ")} first.`
+        : "Run AI document analysis before generating documents.";
+    }
     if ((application.ocrScore ?? 0) < 70) return "OCR score is below the 70% threshold.";
     return "Application status must be Approved or Processing.";
-  }, [staffActedOnPayment, application.paymentStatus, application.ocrScore, application.status]);
+  }, [paymentVerified, aiAnalysisStatus.complete, aiAnalysisStatus.missing, application.ocrScore, application.status]);
 
   const hasAnyDoc =
     !!application.insuranceDocumentUrl ||
@@ -107,7 +135,7 @@ export const InsuranceDocumentAction = ({ application }: Props) => {
     if (loading) return;
     setLoading(true);
     try {
-      await generateAndStoreInsuranceDocument(application, user);
+      await generateAndStoreInsuranceDocument({ ...application, paymentStatus: "paid" }, user);
       toast.success("All 4 documents generated successfully!", {
         description: "Vehicle Insurance, TDAC QR, TM2, and TM3 are ready.",
       });

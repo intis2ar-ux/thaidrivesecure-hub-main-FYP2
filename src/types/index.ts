@@ -115,7 +115,14 @@ export interface AIVerification {
 
 export type PaymentMethod = "qr" | "cash";
 export type PaymentStatus = "pending" | "paid" | "failed";
-export type PaymentVerificationStatus = "pending_verification" | "verified" | "rejected" | "updated";
+export type PaymentVerificationStatus =
+  | "pending_verification"
+  | "awaiting_cash_payment"
+  | "collection_scheduled"
+  | "cash_received"
+  | "verified"
+  | "rejected"
+  | "updated";
 
 export interface PaymentVerificationLog {
   action: PaymentVerificationStatus;
@@ -124,15 +131,25 @@ export interface PaymentVerificationLog {
   timestamp: Date;
 }
 
+export interface CashCollectionDetails {
+  date?: string;
+  time?: string;
+  branch?: string;
+  staffNotes?: string;
+}
+
 export interface Payment {
   id: string;
   applicationId: string;
   customerName: string;
+  customerPhone?: string;
   method: PaymentMethod;
   amount: number;
   status: PaymentStatus;
   verificationStatus: PaymentVerificationStatus;
   receiptUrl?: string;
+  paymentDeadline?: Date;
+  cashCollection?: CashCollectionDetails;
   createdAt: Date;
   verifiedAt?: Date;
   verifiedBy?: string;
@@ -178,4 +195,3 @@ export interface Report {
   downloadUrl: string;
   createdAt: Date;
 }
-

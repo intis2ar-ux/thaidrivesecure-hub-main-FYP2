@@ -37,15 +37,32 @@ interface PaymentVerificationTableProps {
   onRequestUpdate: (payment: Payment) => void;
 }
 
-const verificationStatusMap: Record<PaymentVerificationStatus, { label: string; variant: "pending" | "approved" | "rejected" | "info" }> = {
+const onlineStatusMap: Record<PaymentVerificationStatus, { label: string; variant: "pending" | "approved" | "rejected" | "info" | "warning" }> = {
   pending_verification: { label: "Pending Verification", variant: "pending" },
+  awaiting_cash_payment: { label: "Pending Verification", variant: "pending" },
+  collection_scheduled: { label: "Pending Verification", variant: "pending" },
+  cash_received: { label: "Pending Verification", variant: "pending" },
   verified: { label: "Verified", variant: "approved" },
   rejected: { label: "Rejected", variant: "rejected" },
   updated: { label: "Updated", variant: "info" },
 };
 
+const cashStatusMap: Record<PaymentVerificationStatus, { label: string; variant: "pending" | "approved" | "rejected" | "info" | "warning" }> = {
+  pending_verification: { label: "Awaiting Cash Payment", variant: "pending" },
+  awaiting_cash_payment: { label: "Awaiting Cash Payment", variant: "pending" },
+  collection_scheduled: { label: "Collection Scheduled", variant: "info" },
+  cash_received: { label: "Cash Received", variant: "warning" },
+  verified: { label: "Payment Confirmed", variant: "approved" },
+  rejected: { label: "Rejected", variant: "rejected" },
+  updated: { label: "Update Requested", variant: "info" },
+};
+
+const getStatusInfo = (payment: Payment) =>
+  payment.method === "cash" ? cashStatusMap[payment.verificationStatus] : onlineStatusMap[payment.verificationStatus];
+
 const getQueuePriority = (verificationStatus: PaymentVerificationStatus) => {
   if (verificationStatus === "verified") return { label: "High Priority", color: "bg-success" };
+  if (verificationStatus === "cash_received") return { label: "Ready to Confirm", color: "bg-accent" };
   if (verificationStatus === "rejected" || verificationStatus === "updated") return { label: "Requires Attention", color: "bg-warning" };
   return { label: "Normal", color: "bg-muted-foreground" };
 };
@@ -104,7 +121,7 @@ export const PaymentVerificationTable = ({
       </TableHeader>
       <TableBody>
         {payments.map((payment) => {
-          const statusInfo = verificationStatusMap[payment.verificationStatus];
+          const statusInfo = getStatusInfo(payment);
           const priority = getQueuePriority(payment.verificationStatus);
 
           return (
@@ -131,7 +148,12 @@ export const PaymentVerificationTable = ({
                 </div>
               </TableCell>
               <TableCell>
-                {payment.receiptUrl ? (
+                {payment.method === "cash" ? (
+                  <Badge variant="outline" className="gap-1 text-accent border-accent/30">
+                    <Banknote className="h-3 w-3" />
+                    Optional
+                  </Badge>
+                ) : payment.receiptUrl ? (
                   <Badge variant="outline" className="gap-1 text-success border-success/30">
                     <ImageIcon className="h-3 w-3" />
                     Yes
@@ -151,7 +173,7 @@ export const PaymentVerificationTable = ({
                   <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => onViewDetails(payment)} title="View Details">
                     <Eye className="h-4 w-4" />
                   </Button>
-                  {payment.verificationStatus === "pending_verification" && (
+                  {(payment.verificationStatus === "pending_verification" || payment.verificationStatus === "awaiting_cash_payment" || payment.verificationStatus === "collection_scheduled" || payment.verificationStatus === "cash_received") && (
                     <>
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:text-success" onClick={() => onVerify(payment)} title="Verify">
                         <CheckCircle2 className="h-4 w-4" />

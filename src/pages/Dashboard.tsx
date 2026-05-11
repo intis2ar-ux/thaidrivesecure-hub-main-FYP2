@@ -50,7 +50,15 @@ const Dashboard = () => {
   const approvedApps = applications.filter((a) => a.status === "approved").length;
   const rejectedApps = applications.filter((a) => a.status === "rejected").length;
 
-  const pendingPayments = payments.filter((p) => p.verificationStatus === "pending_verification" && p.status === "paid").length;
+  const pendingPayments = payments.filter((p) =>
+    p.status === "paid" &&
+    (
+      p.verificationStatus === "pending_verification" ||
+      p.verificationStatus === "awaiting_cash_payment" ||
+      p.verificationStatus === "collection_scheduled" ||
+      p.verificationStatus === "cash_received"
+    )
+  ).length;
   const verifiedPayments = payments.filter((p) => p.verificationStatus === "verified").length;
 
 

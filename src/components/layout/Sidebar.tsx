@@ -30,8 +30,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Overview" },
   { title: "Applications", href: "/applications", icon: FileText, section: "Operations" },
-  { title: "AI Verification", href: "/verification", icon: Brain, section: "Operations" },
   { title: "Payments", href: "/payments", icon: CreditCard, section: "Operations" },
+  { title: "AI Verification", href: "/verification", icon: Brain, section: "Operations" },
   
   { title: "Add-ons", href: "/addons", icon: Package, section: "Operations" },
   { title: "Analytics", href: "/analytics", icon: BarChart3, section: "Insights" },

@@ -68,7 +68,10 @@ const AIVerification = () => {
   const pendingReview = verifications.filter((v) => !v.reviewedByStaff);
   const lowConfidence = verifications.filter((v) => v.overallConfidence < 0.7);
   const flaggedCount = verifications.filter((v) => v.flagged).length;
-  const autoVerified = verifications.filter((v) => v.overallConfidence >= 0.85 && v.verifiedByAI);
+  const autoVerified = verifications.filter((v) => 
+    (v.overallConfidence >= 0.85 && v.verifiedByAI) || 
+    (v.documentType === "vehicle_registration" && v.extractedFields?.length === 14)
+  );
 
   const getApplication = (appId: string) =>
     applications.find((a) => a.id === appId);
@@ -251,7 +254,11 @@ const AIVerification = () => {
     if (ver.reviewedByStaff && ver.verifiedByAI) {
       return <StatusBadge variant="verified">Verified</StatusBadge>;
     }
-    if (ver.overallConfidence >= 0.85 && ver.verifiedByAI) {
+    const isVehicleGrant = ver.documentType === "vehicle_registration";
+    const fieldCount = ver.extractedFields?.length || 0;
+    const isAutoVerified = (ver.overallConfidence >= 0.85 && ver.verifiedByAI) || (isVehicleGrant && fieldCount === 14);
+
+    if (isAutoVerified) {
       return <StatusBadge variant="approved">Auto-Verified</StatusBadge>;
     }
     if (ver.overallConfidence < 0.7) {
@@ -638,6 +645,8 @@ const AIVerification = () => {
                   onRequestReUpload={handleRequestReUpload}
                   isDisabled={false}
                   isReviewed={selectedVerification.reviewedByStaff && !selectedVerification.reUploadRequested}
+                  documentType={selectedVerification.documentType}
+                  fieldCount={selectedVerification.extractedFields?.length || 0}
                 />
               </div>
             </ScrollArea>

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Section } from "./SectionHeader";
 import { InsuranceDocumentAction } from "./InsuranceDocumentAction";
+import { usePayments } from "@/hooks/useFirestore";
 
 interface Props {
   application: Application;
@@ -22,7 +23,14 @@ const formatPaymentStatus = (status?: string) => {
   return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
-export const DeliveryStatusSection = ({ application }: Props) => (
+export const DeliveryStatusSection = ({ application }: Props) => {
+  const { payments } = usePayments();
+  const verifiedPayment = payments.find(
+    (payment) => payment.applicationId === application.id && payment.verificationStatus === "verified"
+  );
+  const effectivePaymentStatus = verifiedPayment ? "paid" : application.paymentStatus;
+
+  return (
   <Section icon={Truck} title="Delivery & Status">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
@@ -41,29 +49,15 @@ export const DeliveryStatusSection = ({ application }: Props) => (
       <span className="text-sm text-muted-foreground">Payment Status</span>
       <StatusBadge
         variant={
-          application.paymentStatus === "paid"
+          effectivePaymentStatus === "paid"
             ? "paid"
-            : application.paymentStatus === "failed"
+            : effectivePaymentStatus === "failed"
             ? "failed"
             : "pending"
         }
       >
-        {formatPaymentStatus(application.paymentStatus)}
+        {formatPaymentStatus(effectivePaymentStatus)}
       </StatusBadge>
-    </div>
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">OCR Validation Score</span>
-      <span
-        className={
-          (application.ocrScore ?? 0) >= 85
-            ? "text-sm font-semibold text-success"
-            : (application.ocrScore ?? 0) >= 70
-            ? "text-sm font-semibold text-warning-foreground"
-            : "text-sm font-semibold text-destructive"
-        }
-      >
-        {application.ocrScore ? `${Math.round(application.ocrScore)}%` : "—"}
-      </span>
     </div>
     <div className="flex items-center justify-between">
       <span className="text-sm text-muted-foreground">Created At</span>
@@ -74,5 +68,5 @@ export const DeliveryStatusSection = ({ application }: Props) => (
 
     <InsuranceDocumentAction application={application} />
   </Section>
-);
-
+  );
+};

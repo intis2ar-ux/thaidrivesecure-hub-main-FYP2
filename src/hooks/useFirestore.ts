@@ -29,6 +29,7 @@ import {
   AddonStatus,
   AddonType,
   User,
+  CashCollectionDetails,
 } from "@/types";
 import { generateInsurancePDF } from "@/lib/insuranceDocument";
 import { generateTdacQrPDF } from "@/lib/tdacQrDocument";
@@ -337,6 +338,14 @@ export const useApplications = () => {
     };
 
     const ocrData = await fetchOcrData();
+    const requiresPassportAnalysis = !!application.documents?.passportUrls?.length;
+    const requiresVehicleGrantAnalysis = !!application.documents?.vehicleGrantUrl;
+    if (requiresPassportAnalysis && !ocrData.passportData) {
+      throw new Error("Run passport AI analysis before generating documents");
+    }
+    if (requiresVehicleGrantAnalysis && !ocrData.vehicleGrantData) {
+      throw new Error("Run vehicle grant AI analysis before generating documents");
+    }
 
     // 3. Generate all 4 PDFs (insurance is sync, TDAC is async due to QR)
     const [insuranceBlob, tdacBlob, tm2Blob, tm3Blob] = await Promise.all([
@@ -485,7 +494,14 @@ export const usePayments = () => {
 
   useEffect(() => {
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    const paymentActions = ["payment_verified", "payment_rejected", "payment_request_update"];
+    const paymentActions = [
+      "payment_submitted",
+      "payment_verified",
+      "payment_rejected",
+      "payment_request_update",
+      "payment_collection_scheduled",
+      "payment_cash_received",
+    ];
 
     const unsubscribeOrders = onSnapshot(
       q,
@@ -515,6 +531,9 @@ export const usePayments = () => {
                     logs.push({
                       action: logData.action === "payment_verified" ? "verified"
                         : logData.action === "payment_rejected" ? "rejected"
+                        : logData.action === "payment_collection_scheduled" ? "collection_scheduled"
+                        : logData.action === "payment_cash_received" ? "cash_received"
+                        : logData.action === "payment_submitted" ? "pending_verification"
                         : "updated",
                       performedBy: logData.performedBy || "Unknown",
                       notes: logData.notes,
@@ -554,7 +573,8 @@ export const usePayments = () => {
             const method: "qr" | "cash" = rawMethod === "cash" ? "cash" : "qr";
             const verificationHistory = logsMap[order.id] || [];
 
-            let verificationStatus: import("@/types").PaymentVerificationStatus = "pending_verification";
+            let verificationStatus: import("@/types").PaymentVerificationStatus =
+              method === "cash" ? "awaiting_cash_payment" : "pending_verification";
             let verifiedAt: Date | undefined;
             let verifiedBy: string | undefined;
             let verificationNotes: string | undefined;
@@ -564,6 +584,10 @@ export const usePayments = () => {
               const latest = verificationHistory[0];
               verificationStatus = latest.action === "verified" ? "verified"
                 : latest.action === "rejected" ? "rejected"
+                : latest.action === "collection_scheduled" ? "collection_scheduled"
+                : latest.action === "cash_received" ? "cash_received"
+                : latest.action === "pending_verification" && method === "cash" ? "awaiting_cash_payment"
+                : latest.action === "pending_verification" ? "pending_verification"
                 : "updated";
               verifiedBy = latest.performedBy;
               verificationNotes = latest.notes;
@@ -573,16 +597,25 @@ export const usePayments = () => {
 
             const customer = data.customer || {};
             const payment = data.payment || {};
+            const cashCollection = data.cashCollection || payment.cashCollection || {};
 
             return {
               id: order.id,
               applicationId: order.id,
               customerName: data.fullName || data.name || customer.name || "Unknown",
+              customerPhone: data.phoneNumber || data.phone || customer.phone || "",
               method,
               amount: data.pricing?.totalPrice || data.totalPrice || 0,
               status: paymentStatus,
               verificationStatus,
               receiptUrl: data.receiptUrl || data.documents?.receiptUrl || payment.receiptUrl,
+              paymentDeadline: data.paymentDeadline ? convertTimestamp(data.paymentDeadline) : undefined,
+              cashCollection: {
+                date: cashCollection.date || "",
+                time: cashCollection.time || "",
+                branch: cashCollection.branch || "",
+                staffNotes: cashCollection.staffNotes || "",
+              },
               createdAt: convertTimestamp(data.createdAt),
               verifiedAt,
               verifiedBy,
@@ -613,10 +646,42 @@ export const usePayments = () => {
 
   const updatePaymentVerification = async (
     orderId: string,
-    action: "payment_verified" | "payment_rejected" | "payment_request_update",
-    options: { notes?: string; performedBy?: string }
+    action:
+      | "payment_verified"
+      | "payment_rejected"
+      | "payment_request_update"
+      | "payment_collection_scheduled"
+      | "payment_cash_received",
+    options: { notes?: string; performedBy?: string; cashCollection?: CashCollectionDetails }
   ) => {
     try {
+      const orderUpdates: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+      };
+
+      if (options.cashCollection) {
+        orderUpdates.cashCollection = options.cashCollection;
+      }
+
+      if (action === "payment_verified") {
+        orderUpdates.paymentStatus = "paid";
+        orderUpdates["payment.status"] = "paid";
+        orderUpdates.paymentVerifiedAt = serverTimestamp();
+        orderUpdates.paymentVerifiedBy = options.performedBy || "Unknown";
+      } else if (action === "payment_rejected") {
+        orderUpdates.paymentStatus = "failed";
+        orderUpdates["payment.status"] = "failed";
+      } else if (action === "payment_request_update") {
+        orderUpdates.paymentStatus = "pending";
+        orderUpdates["payment.status"] = "pending";
+      }
+
+      if (Object.keys(orderUpdates).length > 1) {
+        await updateDoc(doc(db, "orders", orderId), {
+          ...orderUpdates,
+        });
+      }
+
       await addDoc(collection(db, "orders", orderId, "status_logs"), {
         action,
         notes: options.notes || "",

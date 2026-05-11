@@ -27,7 +27,7 @@ import {
 import { usePayments } from "@/hooks/useFirestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo } from "react";
-import { Payment, PaymentVerificationStatus } from "@/types";
+import { CashCollectionDetails, Payment } from "@/types";
 import { ReceiptModal } from "@/components/payments/ReceiptModal";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { PaymentVerificationTable } from "@/components/payments/PaymentVerificationTable";
@@ -50,7 +50,13 @@ const Payments = () => {
 
   // Active payments: from approved applications still pending verification
   const activePayments = useMemo(
-    () => rawPayments.filter((p) => p.status === "paid" && (p.verificationStatus === "pending_verification" || p.verificationStatus === "updated")),
+    () => rawPayments.filter((p) => p.status === "paid" && (
+      p.verificationStatus === "pending_verification" ||
+      p.verificationStatus === "awaiting_cash_payment" ||
+      p.verificationStatus === "collection_scheduled" ||
+      p.verificationStatus === "cash_received" ||
+      p.verificationStatus === "updated"
+    )),
     [rawPayments]
   );
 
@@ -68,7 +74,12 @@ const Payments = () => {
 
   // Stats
   const verifiedPayments = allPaidPayments.filter((p) => p.verificationStatus === "verified");
-  const pendingVerification = allPaidPayments.filter((p) => p.verificationStatus === "pending_verification");
+  const pendingVerification = allPaidPayments.filter((p) =>
+    p.verificationStatus === "pending_verification" ||
+    p.verificationStatus === "awaiting_cash_payment" ||
+    p.verificationStatus === "collection_scheduled"
+  );
+  const cashReady = allPaidPayments.filter((p) => p.verificationStatus === "cash_received");
   const rejectedPayments = allPaidPayments.filter((p) => p.verificationStatus === "rejected" || p.verificationStatus === "updated");
   const totalRevenue = verifiedPayments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -159,6 +170,31 @@ const Payments = () => {
     }
   };
 
+  const handleScheduleCollection = async (paymentId: string, details: CashCollectionDetails, notes: string) => {
+    try {
+      await updatePaymentVerification(paymentId, "payment_collection_scheduled", {
+        notes: notes || `Collection scheduled for ${details.date} at ${details.time} (${details.branch})`,
+        performedBy: user?.name || "Unknown",
+        cashCollection: details,
+      });
+      toast.success("Cash collection scheduled");
+    } catch (err) {
+      toast.error("Failed to schedule collection");
+    }
+  };
+
+  const handleMarkCashReceived = async (paymentId: string, notes: string) => {
+    try {
+      await updatePaymentVerification(paymentId, "payment_cash_received", {
+        notes,
+        performedBy: user?.name || "Unknown",
+      });
+      toast.success("Cash marked as received");
+    } catch (err) {
+      toast.error("Failed to mark cash received");
+    }
+  };
+
   const openDetails = (payment: Payment) => {
     setSelectedPayment(payment);
     setDetailOpen(true);
@@ -200,6 +236,9 @@ const Payments = () => {
     <>
       <SelectItem value="all">All Status</SelectItem>
       <SelectItem value="pending_verification">Pending Verification</SelectItem>
+      <SelectItem value="awaiting_cash_payment">Awaiting Cash Payment</SelectItem>
+      <SelectItem value="collection_scheduled">Collection Scheduled</SelectItem>
+      <SelectItem value="cash_received">Cash Received</SelectItem>
       <SelectItem value="updated">Updated by Customer</SelectItem>
     </>
   ) : (
@@ -228,14 +267,14 @@ const Payments = () => {
             icon={ShieldCheck}
           />
           <StatCard
-            title="Pending Verification"
+            title="Pending / Scheduled"
             value={pendingVerification.length}
-            subtitle="Awaiting staff review"
+            subtitle="Awaiting action"
             icon={Clock}
           />
           <StatCard
             title="Rejected / Update"
-            value={rejectedPayments.length}
+            value={rejectedPayments.length + cashReady.length}
             subtitle="Requires attention"
             icon={AlertTriangle}
           />
@@ -434,6 +473,8 @@ const Payments = () => {
         onVerify={handleVerify}
         onReject={handleReject}
         onRequestUpdate={handleRequestUpdate}
+        onScheduleCollection={handleScheduleCollection}
+        onMarkCashReceived={handleMarkCashReceived}
       />
     </DashboardLayout>
   );

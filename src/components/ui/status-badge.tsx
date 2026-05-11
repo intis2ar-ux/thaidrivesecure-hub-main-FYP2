@@ -15,6 +15,9 @@ type StatusVariant =
   | "warning"
   | "error"
   | "pending_verification"
+  | "awaiting_cash_payment"
+  | "collection_scheduled"
+  | "cash_received"
   | "updated"
   | "processing"
   | "document_generated";
@@ -32,6 +35,12 @@ const variantStyles: Record<StatusVariant, string> = {
     "bg-warning/12 text-warning-foreground border-warning/25",
   pending_verification:
     "bg-warning/12 text-warning-foreground border-warning/25",
+  awaiting_cash_payment:
+    "bg-warning/12 text-warning-foreground border-warning/25",
+  collection_scheduled:
+    "bg-primary/12 text-primary border-primary/25",
+  cash_received:
+    "bg-accent/12 text-accent border-accent/25",
   verified:
     "bg-success/12 text-success border-success/25",
   approved:

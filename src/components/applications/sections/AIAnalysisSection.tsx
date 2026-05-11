@@ -4,7 +4,7 @@ import { Application } from "@/types";
 import { Section } from "./SectionHeader";
 import { BrainCircuit, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAIVerifications, useApplications } from "@/hooks/useFirestore";
+import { useAIVerifications, useApplications, usePayments } from "@/hooks/useFirestore";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -15,8 +15,9 @@ interface Props {
 
 export const AIAnalysisSection = ({ application }: Props) => {
   const navigate = useNavigate();
-  const { processDocumentAI } = useAIVerifications();
-  const { updateApplicationFields } = useApplications();
+  const { processDocumentAI, updateVerification } = useAIVerifications();
+  const { updateApplicationFields, updateApplicationStatus } = useApplications();
+  const { payments } = usePayments();
   const [loadingPassport, setLoadingPassport] = useState(false);
   const [loadingVehicleGrant, setLoadingVehicleGrant] = useState(false);
 
@@ -56,8 +57,12 @@ export const AIAnalysisSection = ({ application }: Props) => {
     application.status === "document_generated" ||
     application.status === "completed";
 
-  // Gate 2: payment must be confirmed
-  const isPaymentConfirmed = application.paymentStatus === "paid";
+  // Gate 2: payment must be confirmed. Some older orders have a verified payment log
+  // while the legacy order.paymentStatus field still says pending.
+  const verifiedPayment = payments.find(
+    (payment) => payment.applicationId === application.id && payment.verificationStatus === "verified"
+  );
+  const isPaymentConfirmed = application.paymentStatus === "paid" || !!verifiedPayment;
 
   // Both gates must pass before AI can run
   const canRunAI = isApplicationActioned && isPaymentConfirmed;
@@ -78,8 +83,12 @@ export const AIAnalysisSection = ({ application }: Props) => {
 
       const result = await processDocumentAI(application.id, url, type);
 
-      // Auto-fill fields if confidence >= 0.85
-      if (result.overallConfidence >= 0.85) {
+      // Auto-fill fields and Auto-Approve if confidence >= 0.85 or vehicle grant has 14 fields
+      const fieldCount = result.extractedData ? Object.keys(result.extractedData).length : 0;
+      const isVehicleGrant = type === "vehicle_grant";
+      const isAutoApprovable = result.overallConfidence >= 0.85 || (isVehicleGrant && fieldCount === 14);
+
+      if (isAutoApprovable) {
         const updates: any = {};
         const ext = result.extractedData || {};
 
@@ -92,7 +101,7 @@ export const AIAnalysisSection = ({ application }: Props) => {
            if (givenName || familyName) {
              updates.name = `${givenName} ${familyName}`.trim();
            }
-        } else if (type === "vehicle_grant") {
+        } else if (isVehicleGrant) {
            const vTypeKey = Object.keys(ext).find(k => 
              k.toLowerCase().includes("type") || k.toLowerCase().includes("model")
            );
@@ -104,6 +113,12 @@ export const AIAnalysisSection = ({ application }: Props) => {
         if (Object.keys(updates).length > 0) {
           await updateApplicationFields(application.id, updates, "AI Agent");
         }
+
+        // Auto-approve the application status
+        await updateApplicationStatus(application.id, "approved", {
+          notes: `Auto-approved by AI (${type === "passport" ? "Passport" : "Vehicle Grant"} with ${fieldCount} fields)`,
+          performedBy: "AI Agent"
+        });
       }
 
       const label = type === "passport" ? "Passport" : "Vehicle Grant";
@@ -130,14 +145,14 @@ export const AIAnalysisSection = ({ application }: Props) => {
   const renderResult = (result: any, type: "passport" | "vehicle_grant") => {
     if (!result) return null;
     const { status, overallConfidence } = result;
-    const isVerified = status === "verified";
     const fieldCount = result.extractedData ? Object.keys(result.extractedData).length : 0;
+    const isVerified = status === "verified" || (type === "vehicle_grant" && fieldCount === 14);
     
     return (
       <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium flex items-center gap-2">
-            {isVerified ? (
+            {isVerified || overallConfidence >= 0.85 ? (
               <span className="text-success flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Verified</span>
             ) : (
               <span className="text-warning flex items-center gap-1"><AlertTriangle className="w-4 h-4"/> Needs Review</span>
