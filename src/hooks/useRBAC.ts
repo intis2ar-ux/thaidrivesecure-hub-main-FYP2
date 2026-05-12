@@ -65,8 +65,11 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     { action: "update", resource: "tracking" },
     // Add-ons - view only
     { action: "view", resource: "addons" },
+    { action: "update", resource: "addons" },
     // Analytics - view only
     { action: "view", resource: "analytics" },
+    // Reports - view only
+    { action: "view", resource: "reports" },
     // Logs - limited view
     { action: "view", resource: "logs" },
   ],

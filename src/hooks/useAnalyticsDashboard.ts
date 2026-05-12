@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useApplications, usePayments, useAIVerifications } from "./useFirestore";
+import { useApplications, usePayments, useAIVerifications, useAddons } from "./useFirestore";
 import { format, subDays, startOfDay, endOfDay, isWithinInterval, subWeeks, differenceInMinutes } from "date-fns";
 import { Application } from "@/types";
 
@@ -26,6 +26,7 @@ export const useAnalyticsDashboard = () => {
   const { applications, loading: appsLoading } = useApplications();
   const { payments, loading: paymentsLoading } = usePayments();
   const { verifications, loading: verificationsLoading } = useAIVerifications();
+  const { addons, loading: addonsLoading } = useAddons();
 
   const [filters, setFilters] = useState<AnalyticsFilters>({
     dateRange: { from: undefined, to: undefined },
@@ -33,7 +34,7 @@ export const useAnalyticsDashboard = () => {
     search: "",
   });
 
-  const loading = appsLoading || paymentsLoading || verificationsLoading;
+  const loading = appsLoading || paymentsLoading || verificationsLoading || addonsLoading;
 
   // Filtered applications
   const filteredApps = useMemo(() => {
@@ -86,15 +87,18 @@ export const useAnalyticsDashboard = () => {
     const lastWeekRevenue = lastWeek.reduce((s, a) => s + (a.totalPrice || 0), 0);
     const revenueTrend = lastWeekRevenue > 0 ? Math.round(((thisWeekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100) : 0;
 
+    const addonRevenue = addons.reduce((s, a) => s + (a.cost || 0), 0);
+
     return {
       totalApplications: total,
       approvalRate,
       avgProcessingTime: "2.3 min",
       ocrAccuracy: avgOCR,
-      totalRevenue,
+      totalRevenue: totalRevenue + addonRevenue,
+      addonRevenue,
       trends: { apps: appsTrend, approval: approvalTrend, revenue: revenueTrend, ocr: 3 },
     };
-  }, [filteredApps, verifications, applications]);
+  }, [filteredApps, verifications, applications, addons]);
 
   // Applications over time (last 14 days)
   const applicationsOverTime = useMemo(() => {
@@ -147,15 +151,62 @@ export const useAnalyticsDashboard = () => {
     return buckets;
   }, [verifications]);
 
-  // Revenue trend (monthly)
-  const revenueTrend = useMemo(() => {
+  // Addon Distribution by Type
+  const addonDistribution = useMemo(() => {
+    const types: Record<string, number> = {};
+    addons.forEach((a) => {
+      const typeLabel = a.type.toUpperCase().replace("_", " ");
+      types[typeLabel] = (types[typeLabel] || 0) + 1;
+    });
+    return Object.entries(types).map(([name, value], i) => ({
+      name,
+      value,
+      color: `hsl(var(--chart-${(i % 5) + 1}))`,
+    }));
+  }, [addons]);
+
+  // Addon Status Distribution
+  const addonStatusDistribution = useMemo(() => {
+    const statuses: Record<string, number> = {
+      pending: 0,
+      confirmed: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+    addons.forEach((a) => {
+      if (statuses[a.status] !== undefined) {
+        statuses[a.status]++;
+      }
+    });
+    return [
+      { name: "Completed", value: statuses.completed, color: "hsl(var(--success))" },
+      { name: "Confirmed", value: statuses.confirmed, color: "hsl(var(--primary))" },
+      { name: "Pending", value: statuses.pending, color: "hsl(var(--warning))" },
+      { name: "Cancelled", value: statuses.cancelled, color: "hsl(var(--destructive))" },
+    ];
+  }, [addons]);
+
+  // Revenue trend (monthly) - combining apps and addons
+  const combinedRevenueTrend = useMemo(() => {
     const months: Record<string, number> = {};
+    
+    // Add application revenue
     applications.forEach((a) => {
       const m = format(new Date(a.createdAt), "MMM yyyy");
       months[m] = (months[m] || 0) + (a.totalPrice || 0);
     });
-    return Object.entries(months).slice(-6).map(([name, revenue]) => ({ name: name.split(" ")[0], revenue }));
-  }, [applications]);
+
+    // Add addon revenue
+    addons.forEach((a) => {
+      const m = format(new Date(a.createdAt), "MMM yyyy");
+      months[m] = (months[m] || 0) + (a.cost || 0);
+    });
+
+    return Object.entries(months)
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+      .slice(-6)
+      .map(([name, revenue]) => ({ name: name.split(" ")[0], revenue }));
+  }, [applications, addons]);
 
   // AI Insights
   const insights = useMemo<AIInsight[]>(() => {
@@ -191,6 +242,16 @@ export const useAnalyticsDashboard = () => {
       result.push({ id: "5", type: "positive", title: "Revenue Growth", description: `Revenue increased by ${kpis.trends.revenue}% compared to last week.`, metric: `+${kpis.trends.revenue}%` });
     }
 
+    // Addon specific insights
+    if (addons.length > 0) {
+      const completionRate = Math.round((addons.filter(a => a.status === 'completed').length / addons.length) * 100);
+      if (completionRate > 80) {
+        result.push({ id: "6", type: "positive", title: "Add-on Completion High", description: `${completionRate}% of add-on services are completed successfully.`, metric: `${completionRate}%` });
+      } else if (completionRate < 50 && addons.length > 5) {
+        result.push({ id: "6", type: "warning", title: "Add-on Bottleneck", description: `Only ${completionRate}% of add-on services are being completed. Check for service delays.`, metric: `${completionRate}%` });
+      }
+    }
+
     if (result.length === 0) {
       result.push({ id: "0", type: "info", title: "Collecting Data", description: "More data is needed to generate meaningful insights. Continue processing applications.", metric: "—" });
     }
@@ -222,7 +283,9 @@ export const useAnalyticsDashboard = () => {
     applicationsOverTime,
     statusDistribution,
     ocrDistribution,
-    revenueTrend,
+    revenueTrend: combinedRevenueTrend,
+    addonDistribution,
+    addonStatusDistribution,
     insights,
     tableData,
     filters,

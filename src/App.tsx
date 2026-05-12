@@ -11,6 +11,7 @@ import AIVerification from "./pages/AIVerification";
 import Payments from "./pages/Payments";
 import OrderStatus from "./pages/OrderStatus";
 import Addons from "./pages/Addons";
+import AddonDetails from "./pages/AddonDetails";
 import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
 
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/payments" element={<Payments />} />
             
             <Route path="/addons" element={<Addons />} />
+            <Route path="/addons/:id" element={<AddonDetails />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/reports" element={<Reports />} />
             

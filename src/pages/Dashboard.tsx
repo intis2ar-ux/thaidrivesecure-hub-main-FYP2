@@ -13,6 +13,8 @@ import {
   CreditCard,
   ArrowRight,
   ShieldCheck,
+  Package,
+  Shield,
 } from "lucide-react";
 import {
   BarChart,
@@ -126,7 +128,7 @@ const Dashboard = () => {
             <CardTitle className="text-sm font-semibold text-foreground">Operations Pipeline</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 {
                   label: "Applications",
@@ -152,6 +154,18 @@ const Dashboard = () => {
                   ],
                   href: "/payments",
                 },
+                {
+                  label: "Add-ons",
+                  subtitle: "Stage 3 — Services",
+                  icon: Package,
+                  iconColor: "text-success",
+                  iconBg: "bg-success/8",
+                  stats: [
+                    { icon: Clock, value: analytics.addonStatusDistribution.pending || 0, label: "Pending", color: "text-warning-foreground" },
+                    { icon: Shield, value: analytics.addonStatusDistribution.confirmed || 0, label: "Confirmed", color: "text-success" },
+                  ],
+                  href: "/addons",
+                },
               ].map((stage, idx) => (
                 <div
                   key={stage.label}
@@ -176,8 +190,8 @@ const Dashboard = () => {
                       </div>
                     ))}
                   </div>
-                  {idx < 1 && (
-                    <ArrowRight className="hidden md:block absolute -right-[18px] top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 z-10" />
+                  {idx < 2 && (
+                    <ArrowRight className="hidden lg:block absolute -right-[18px] top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 z-10" />
                   )}
                 </div>
               ))}

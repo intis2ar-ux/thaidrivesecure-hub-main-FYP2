@@ -55,6 +55,8 @@ export interface Application {
   tm2DocumentUrl?: string;
   tm3DocumentUrl?: string;
   statusUpdatedAt?: Date;
+  latestPassportVerificationId?: string;
+  latestVehicleGrantVerificationId?: string;
 }
 
 export interface OcrExtractedField {
@@ -158,7 +160,7 @@ export interface Payment {
   verificationHistory?: PaymentVerificationLog[];
 }
 
-export type AddonType = "tdac" | "insurance" | "towing" | "sim_card";
+export type AddonType = "adapter" | "authorize_letter" | "sim_card" | "tdac" | "tm2_tm3" | "towing";
 export type AddonStatus = "pending" | "confirmed" | "completed" | "cancelled";
 
 export interface Addon {
@@ -170,6 +172,17 @@ export interface Addon {
   status: AddonStatus;
   trackingNumber?: string;
   createdAt?: Date;
+  applicantName: string;
+  applicantPhone: string;
+  pickupDate?: string;
+  deliveryMethod?: string;
+  payment?: {
+    method: string;
+    receiptUrl?: string;
+    status: string;
+    submittedAt: any;
+  };
+  cancellationReason?: string;
 }
 
 
@@ -191,6 +204,8 @@ export interface Report {
   totalApplications: number;
   totalVerified: number;
   totalRejected: number;
+  totalAddons: number;
+  totalAddonRevenue: number;
   totalRevenue: number;
   downloadUrl: string;
   createdAt: Date;

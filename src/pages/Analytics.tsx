@@ -16,7 +16,7 @@ import {
   FileText, TrendingUp, TrendingDown, Clock, Brain, DollarSign,
   Sparkles, AlertTriangle, CheckCircle, Info, Search, CalendarIcon,
   ChevronRight, ArrowUpRight, ArrowDownRight, Zap, ShieldAlert,
-  BarChart3, PieChart as PieChartIcon, Activity,
+  BarChart3, PieChart as PieChartIcon, Activity, Package,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -52,6 +52,7 @@ const Analytics = () => {
   const {
     loading, kpis, applicationsOverTime, statusDistribution,
     ocrDistribution, revenueTrend, insights, tableData,
+    addonDistribution, addonStatusDistribution,
     filters, setFilters,
   } = useAnalyticsDashboard();
 
@@ -289,6 +290,91 @@ const Analytics = () => {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Add-on Analytics Section */}
+        <div className="pt-6 border-t border-border">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Package className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">Add-on Service Analytics</h3>
+              <p className="text-sm text-muted-foreground">Performance and distribution of supplementary services</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Add-on Service Distribution */}
+            <Card className="rounded-2xl shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <PieChartIcon className="h-5 w-5 text-accent" />
+                  Service Type Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-6">
+                  <ResponsiveContainer width="60%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={addonDistribution}
+                        cx="50%" cy="50%"
+                        innerRadius={55} outerRadius={95}
+                        paddingAngle={3}
+                        dataKey="value"
+                        animationDuration={800}
+                      >
+                        {addonDistribution.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex-1 space-y-3">
+                    {addonDistribution.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-xs text-muted-foreground">{item.name}</span>
+                        </div>
+                        <span className="text-xs font-semibold">{item.value}</span>
+                      </div>
+                    ))}
+                    {addonDistribution.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">No data available</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Add-on Status Breakdown */}
+            <Card className="rounded-2xl shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Service Fulfillment Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={addonStatusDistribution} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} />
+                    <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} animationDuration={800}>
+                      {addonStatusDistribution.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* AI Insights Panel */}

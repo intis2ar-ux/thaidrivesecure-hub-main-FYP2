@@ -17,8 +17,9 @@ import { Separator } from "@/components/ui/separator";
 import {
   FileBarChart, Download, Calendar as CalendarIcon,
   Clock, Brain, XCircle, DollarSign, TrendingUp, AlertTriangle, FileText, Loader2,
+  Package, Shield,
 } from "lucide-react";
-import { useReports, useApplications, usePayments, useAIVerifications } from "@/hooks/useFirestore";
+import { useReports, useApplications, usePayments, useAIVerifications, useAddons } from "@/hooks/useFirestore";
 import { format, differenceInDays, startOfDay, endOfDay, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +37,7 @@ const Reports = () => {
   const { applications, loading: appsLoading } = useApplications();
   const { payments, loading: paymentsLoading } = usePayments();
   const { verifications, loading: verificationsLoading } = useAIVerifications();
+  const { addons, loading: addonsLoading } = useAddons();
 
   const [reportType, setReportType] = useState<string>("processing_time");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -43,9 +45,10 @@ const Reports = () => {
   });
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const loading = reportsLoading || appsLoading || paymentsLoading || verificationsLoading;
+  const loading = reportsLoading || appsLoading || paymentsLoading || verificationsLoading || addonsLoading;
 
-  const isWithinDateRange = (dateStr: string | Date | number) => {
+  const isWithinDateRange = (dateStr: string | Date | number | undefined) => {
+    if (!dateStr) return false;
     if (!dateRange.from || !dateRange.to) return true;
     const date = new Date(dateStr);
     return date >= startOfDay(dateRange.from) && date <= endOfDay(dateRange.to);
@@ -54,6 +57,7 @@ const Reports = () => {
   const filteredApps = useMemo(() => applications.filter(a => isWithinDateRange(a.createdAt)), [applications, dateRange]);
   const filteredPayments = useMemo(() => payments.filter(p => isWithinDateRange(p.createdAt)), [payments, dateRange]);
   const filteredVerifications = useMemo(() => verifications.filter(v => isWithinDateRange(v.timestamp)), [verifications, dateRange]);
+  const filteredAddons = useMemo(() => addons.filter(a => isWithinDateRange(a.createdAt)), [addons, dateRange]);
 
   // --- Computed report data (unchanged logic) ---
   const processingTimeData = useMemo(() => {
@@ -108,18 +112,47 @@ const Reports = () => {
   const revenueData = useMemo(() => {
     const paidPayments = filteredPayments.filter(p => p.status === "paid");
     const byMethod: Record<string, { revenue: number; count: number }> = {};
+    
+    // Add Insurance Revenue
     paidPayments.forEach(p => {
       const method = p.method || "Other";
       if (!byMethod[method]) byMethod[method] = { revenue: 0, count: 0 };
       byMethod[method].revenue += p.amount;
       byMethod[method].count += 1;
     });
+
+    // Add Addon Revenue
+    filteredAddons.forEach(a => {
+      const type = "Add-ons";
+      if (!byMethod[type]) byMethod[type] = { revenue: 0, count: 0 };
+      byMethod[type].revenue += a.cost;
+      byMethod[type].count += 1;
+    });
+
     const colors = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))"];
     return Object.entries(byMethod).map(([method, data], i) => ({
       service: method.charAt(0).toUpperCase() + method.slice(1),
       revenue: data.revenue, count: data.count, color: colors[i % colors.length],
     }));
-  }, [filteredPayments]);
+  }, [filteredPayments, filteredAddons]);
+
+  const addonMetricsData = useMemo(() => {
+    const total = filteredAddons.length;
+    const confirmed = filteredAddons.filter(a => a.status === "confirmed").length;
+    const completed = filteredAddons.filter(a => a.status === "completed").length;
+    const cancelled = filteredAddons.filter(a => a.status === "cancelled").length;
+    const totalRevenue = filteredAddons.reduce((sum, a) => sum + a.cost, 0);
+    const completionRate = total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
+
+    const byType: Record<string, number> = {};
+    filteredAddons.forEach(a => {
+      byType[a.type] = (byType[a.type] || 0) + 1;
+    });
+
+    const typeData = Object.entries(byType).map(([name, value]) => ({ name: name.toUpperCase().replace("_", " "), value }));
+
+    return { total, confirmed, completed, cancelled, totalRevenue, completionRate, typeData };
+  }, [filteredAddons]);
 
   const queueData = useMemo(() => {
     const paidApps = filteredPayments.filter(p => p.status === "paid");
@@ -183,6 +216,17 @@ const Reports = () => {
           rows: [["Priority Queue (Paid)", queueData.priority.toString(), queueData.priorityAvgWait.toString()],
             ["Delayed Queue (Cash/Unpaid)", queueData.delayed.toString(), queueData.delayedAvgWait.toString()]],
           summary: `Priority queue is ${((queueData.delayedAvgWait / queueData.priorityAvgWait - 1) * 100).toFixed(0)}% faster` };
+      case "addons":
+        return { title: "Add-on Service Performance Report", headers: ["Metric", "Value"],
+          rows: [
+            ["Total Add-ons Ordered", addonMetricsData.total.toString()],
+            ["Completion Rate", `${addonMetricsData.completionRate}%`],
+            ["Confirmed Orders", addonMetricsData.confirmed.toString()],
+            ["Completed Orders", addonMetricsData.completed.toString()],
+            ["Cancelled Orders", addonMetricsData.cancelled.toString()],
+            ["Total Add-on Revenue", `RM${addonMetricsData.totalRevenue.toLocaleString()}`]
+          ],
+          summary: `Service distribution leads with ${addonMetricsData.typeData[0]?.name || "N/A"}` };
       default: return { title: "Report", headers: [], rows: [], summary: "" };
     }
   };
@@ -304,7 +348,7 @@ const Reports = () => {
             <StatCard title="Total Applications" value={processingTimeData.total} icon={FileBarChart} iconBg="bg-primary/10" iconColor="text-primary" />
             <StatCard title="Avg. Processing" value={`${processingTimeData.averageDays}d`} icon={Clock} iconBg="bg-accent/10" iconColor="text-accent" />
             <StatCard title="AI Confidence" value={`${aiMetricsData.avgConfidence}%`} icon={Brain} iconBg="bg-success/10" iconColor="text-success" />
-            <StatCard title="Total Revenue" value={`RM${revenueData.reduce((s, r) => s + r.revenue, 0).toLocaleString()}`} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
+            <StatCard title="Total Revenue" value={`RM${(revenueData.reduce((s, r) => s + r.revenue, 0)).toLocaleString()}`} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
           </div>
 
           {/* Generate Report Controls */}
@@ -321,6 +365,7 @@ const Reports = () => {
                     <SelectItem value="rejections">Rejections by Reason</SelectItem>
                     <SelectItem value="revenue">Revenue by Service</SelectItem>
                     <SelectItem value="queue">Queue Priority Performance</SelectItem>
+                    <SelectItem value="addons">Add-on Service Performance</SelectItem>
                   </SelectContent>
                 </Select>
                 <Popover>
@@ -366,7 +411,7 @@ const Reports = () => {
           {/* Report Tabs */}
           <Tabs value={reportType} onValueChange={setReportType} className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <TabsList className="grid w-fit grid-cols-5 gap-1 h-auto p-1">
+              <TabsList className="grid w-fit grid-cols-3 sm:grid-cols-6 gap-1 h-auto p-1">
                 <TabsTrigger value="processing_time" className="text-xs gap-1.5 px-3 py-2">
                   <Clock className="h-3.5 w-3.5" /> Processing
                 </TabsTrigger>
@@ -381,6 +426,9 @@ const Reports = () => {
                 </TabsTrigger>
                 <TabsTrigger value="queue" className="text-xs gap-1.5 px-3 py-2">
                   <TrendingUp className="h-3.5 w-3.5" /> Queue
+                </TabsTrigger>
+                <TabsTrigger value="addons" className="text-xs gap-1.5 px-3 py-2">
+                  <Package className="h-3.5 w-3.5" /> Add-ons
                 </TabsTrigger>
               </TabsList>
               
@@ -616,6 +664,66 @@ const Reports = () => {
                         Priority queue is {((queueData.delayedAvgWait / queueData.priorityAvgWait - 1) * 100).toFixed(0)}% faster than delayed queue
                       </p>
                     </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+            {/* Add-ons */}
+            <TabsContent value="addons">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <StatCard title="Total Add-ons" value={addonMetricsData.total} icon={Package} iconBg="bg-primary/10" iconColor="text-primary" />
+                <StatCard title="Completion Rate" value={`${addonMetricsData.completionRate}%`} icon={TrendingUp} iconBg="bg-success/10" iconColor="text-success" />
+                <StatCard title="Confirmed" value={addonMetricsData.confirmed} icon={Shield} iconBg="bg-accent/10" iconColor="text-accent" />
+                <StatCard title="Add-on Revenue" value={`RM${addonMetricsData.totalRevenue.toLocaleString()}`} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border border-border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Service Distribution</CardTitle>
+                    <CardDescription className="text-xs">Add-on volume by service type</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={addonMetricsData.typeData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis dataKey="name" className="text-xs" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+                <Card className="border border-border shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">Status Breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="text-xs font-semibold uppercase tracking-wide">Status</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wide text-right">Count</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wide text-right">Percentage</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[
+                          { label: "Pending", value: addonMetricsData.total - addonMetricsData.confirmed - addonMetricsData.completed - addonMetricsData.cancelled, color: "text-muted-foreground" },
+                          { label: "Confirmed", value: addonMetricsData.confirmed, color: "text-accent" },
+                          { label: "Completed", value: addonMetricsData.completed, color: "text-success" },
+                          { label: "Cancelled", value: addonMetricsData.cancelled, color: "text-destructive" },
+                        ].map((s) => (
+                          <TableRow key={s.label}>
+                            <TableCell className="text-sm font-medium">{s.label}</TableCell>
+                            <TableCell className="text-sm text-right">{s.value}</TableCell>
+                            <TableCell className="text-sm text-right text-muted-foreground">
+                              {addonMetricsData.total > 0 ? ((s.value / addonMetricsData.total) * 100).toFixed(1) : 0}%
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
               </div>

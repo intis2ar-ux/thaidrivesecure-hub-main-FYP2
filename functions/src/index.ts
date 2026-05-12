@@ -36,6 +36,7 @@ export const processDocument = onCall(
     }
 
     const { documentUrl, documentType, applicationId } = request.data;
+    console.log(`Processing ${documentType} for app ${applicationId}. URL: ${documentUrl}`);
 
     if (!documentUrl || !documentType || !applicationId) {
       throw new HttpsError(
@@ -58,10 +59,8 @@ export const processDocument = onCall(
         );
       }
 
-      const PROJECT_ID =
-        process.env.GCLOUD_PROJECT ||
-        admin.app().options.projectId ||
-        "67186739808";
+      const PROJECT_ID = admin.app().options.projectId || "thaidrive-b7eb4";
+      console.log(`Using Project ID for Document AI: ${PROJECT_ID}`);
 
       // Download the document file from the provided Firebase Storage URL
       const response = await fetch(documentUrl);

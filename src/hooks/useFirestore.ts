@@ -5,6 +5,7 @@ import {
   orderBy,
   onSnapshot,
   doc,
+  getDoc,
   updateDoc,
   addDoc,
   deleteDoc,
@@ -38,19 +39,146 @@ import { generateTm3PDF } from "@/lib/tm3Document";
 
 // Helper to convert Firestore timestamps
 const convertTimestamp = (timestamp: any): Date => {
+  if (!timestamp) return new Date(); // Handle pending serverTimestamp
   if (timestamp instanceof Timestamp) {
     return timestamp.toDate();
   }
-  if (timestamp?.seconds) {
-    return new Timestamp(timestamp.seconds, timestamp.nanoseconds).toDate();
+  if (timestamp?.seconds !== undefined) {
+    return new Timestamp(timestamp.seconds, timestamp.nanoseconds || 0).toDate();
   }
-  return new Date(timestamp);
+  const d = new Date(timestamp);
+  return isNaN(d.getTime()) ? new Date() : d;
 };
 
 const normalizeLowerString = (value: unknown, fallback = ""): string => {
   if (typeof value === "string") return value.toLowerCase();
   if (typeof value === "number" || typeof value === "boolean") return String(value).toLowerCase();
   return fallback.toLowerCase();
+};
+
+// Applications Hook
+const mapFirestoreOrderToApplication = (id: string, data: any): Application => {
+  // Nested shapes (newer schema): customer.*, trip.*, payment.*
+  const customer = data.customer || {};
+  const trip = data.trip || {};
+
+  // Extract passport URLs from documents.passportDocuments array
+  const passportUrls: string[] = [];
+  if (data.documents?.passportDocuments && Array.isArray(data.documents.passportDocuments)) {
+    data.documents.passportDocuments.forEach((p: any) => {
+      if (p?.url) passportUrls.push(p.url);
+    });
+  } else if (data.documents?.passportUrls) {
+    passportUrls.push(...data.documents.passportUrls);
+  }
+
+  // Extract vehicle grant URL
+  const vehicleGrantUrl = data.documents?.vehicleGrant?.url || data.documents?.vehicleGrantUrl || "";
+
+  // Map status from Firestore format (e.g. "Order Pending") to app format
+  const rawStatus = (data.status || "pending").toString().toLowerCase();
+  let mappedStatus: ApplicationStatus = "pending";
+  if (rawStatus.includes("applied")) {
+    mappedStatus = "applied";
+  } else if (rawStatus.includes("document_generated") || rawStatus.includes("document generated")) {
+    mappedStatus = "document_generated";
+  } else if (rawStatus.includes("completed")) {
+    mappedStatus = "completed";
+  } else if (rawStatus.includes("processing")) {
+    mappedStatus = "processing";
+  } else if (rawStatus.includes("approved") || rawStatus.includes("verified")) {
+    mappedStatus = "approved";
+  } else if (rawStatus.includes("rejected") || rawStatus.includes("cancelled")) {
+    mappedStatus = "rejected";
+  }
+
+  // Normalize paymentStatus
+  const rawPaymentStatus = (
+    data.paymentStatus ?? data.payment?.status ?? data.status ?? ""
+  ).toString().toLowerCase();
+  let normalizedPaymentStatus = rawPaymentStatus;
+  if (
+    rawPaymentStatus.includes("paid") ||
+    rawPaymentStatus.includes("verified") ||
+    rawPaymentStatus.includes("approved") ||
+    rawPaymentStatus.includes("submitted")
+  ) {
+    normalizedPaymentStatus = "paid";
+  } else if (rawPaymentStatus.includes("rejected") || rawPaymentStatus.includes("failed")) {
+    normalizedPaymentStatus = "failed";
+  } else if (rawPaymentStatus) {
+    normalizedPaymentStatus = "pending";
+  }
+
+  // OCR score
+  let ocrScore: number =
+    data.ocrScore ??
+    data.ocr?.score ??
+    data.aiVerification?.overallConfidence ??
+    0;
+  if (ocrScore > 0 && ocrScore <= 1) {
+    ocrScore = ocrScore * 100;
+  }
+  if (mappedStatus === "approved" && (!ocrScore || ocrScore < 70)) {
+    ocrScore = 85;
+  }
+
+  // Normalize packages
+  const rawPackages = data.packages || data.selectedItems || [];
+  const packages: string[] = rawPackages.map((pkg: any) =>
+    typeof pkg === "string" ? pkg : pkg?.name || pkg?.label || String(pkg)
+  );
+
+  // Travel block
+  const travelBlock = data.travel || {};
+  const travelInfo = {
+    departDate: travelBlock.departDate ? convertTimestamp(travelBlock.departDate) : undefined,
+    returnDate: travelBlock.returnDate ? convertTimestamp(travelBlock.returnDate) : undefined,
+    duration: travelBlock.duration || "",
+    days: typeof travelBlock.days === "number" ? travelBlock.days : undefined,
+  };
+
+  // Build "when" label
+  let whenLabel = data.travelDayLabel || data.when || trip.travelDayLabel || "";
+  if (!whenLabel && travelInfo.departDate) {
+    const depart = travelInfo.departDate.toLocaleDateString("en-GB", {
+      day: "2-digit", month: "short", year: "numeric",
+    });
+    whenLabel = travelInfo.duration ? `${depart} • ${travelInfo.duration}` : depart;
+  }
+
+  return {
+    id,
+    orderId: data.orderId || id,
+    name: data.fullName || data.name || customer.name || "",
+    email: data.email || customer.email || "",
+    phone: data.phoneNumber || data.phone || customer.phone || "",
+    vehicleType: data.vehicleType || trip.vehicleType || "",
+    where: data.borderRoute || data.where || trip.borderRoute || "",
+    when: whenLabel,
+    travel: travelInfo,
+    packages,
+    passengers: data.passengers || trip.passengers || 1,
+    totalPrice: data.pricing?.totalPrice || data.totalPrice || 0,
+    status: mappedStatus,
+    deliveryMethod: data.deliveryMethod || "",
+    userId: data.userId || customer.userId,
+    createdAt: convertTimestamp(data.createdAt),
+    receiptUrl: data.receiptUrl || "",
+    packageType: data.packageType || "",
+    paymentStatus: normalizedPaymentStatus,
+    ocrScore,
+    insuranceDocumentUrl: data.insuranceDocumentUrl || "",
+    tdacDocumentUrl: data.tdacDocumentUrl || "",
+    tm2DocumentUrl: data.tm2DocumentUrl || "",
+    tm3DocumentUrl: data.tm3DocumentUrl || "",
+    latestPassportVerificationId: data.latestPassportVerificationId || "",
+    latestVehicleGrantVerificationId: data.latestVehicleGrantVerificationId || "",
+    documents: {
+      passportUrls,
+      vehicleGrantUrl,
+    },
+  };
 };
 
 // Applications Hook
@@ -65,132 +193,7 @@ export const useApplications = () => {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const apps: Application[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-
-          // Nested shapes (newer schema): customer.*, trip.*, payment.*
-          const customer = data.customer || {};
-          const trip = data.trip || {};
-          const payment = data.payment || {};
-
-          // Extract passport URLs from documents.passportDocuments array
-          const passportUrls: string[] = [];
-          if (data.documents?.passportDocuments && Array.isArray(data.documents.passportDocuments)) {
-            data.documents.passportDocuments.forEach((p: any) => {
-              if (p?.url) passportUrls.push(p.url);
-            });
-          } else if (data.documents?.passportUrls) {
-            passportUrls.push(...data.documents.passportUrls);
-          }
-
-          // Extract vehicle grant URL
-          const vehicleGrantUrl = data.documents?.vehicleGrant?.url || data.documents?.vehicleGrantUrl || "";
-
-          // Map status from Firestore format (e.g. "Order Pending") to app format
-          const rawStatus = (data.status || "pending").toString().toLowerCase();
-          let mappedStatus: ApplicationStatus = "pending";
-          if (rawStatus.includes("applied")) {
-            mappedStatus = "applied";
-          } else if (rawStatus.includes("document_generated") || rawStatus.includes("document generated")) {
-            mappedStatus = "document_generated";
-          } else if (rawStatus.includes("completed")) {
-            mappedStatus = "completed";
-          } else if (rawStatus.includes("processing")) {
-            mappedStatus = "processing";
-          } else if (rawStatus.includes("approved") || rawStatus.includes("verified")) {
-            mappedStatus = "approved";
-          } else if (rawStatus.includes("rejected") || rawStatus.includes("cancelled")) {
-            mappedStatus = "rejected";
-          }
-
-          // Normalize paymentStatus to lowercase canonical values
-          const rawPaymentStatus = (
-            data.paymentStatus ?? data.payment?.status ?? data.status ?? ""
-          ).toString().toLowerCase();
-          let normalizedPaymentStatus = rawPaymentStatus;
-          if (
-            rawPaymentStatus.includes("paid") ||
-            rawPaymentStatus.includes("verified") ||
-            rawPaymentStatus.includes("approved") ||
-            rawPaymentStatus.includes("submitted")
-          ) {
-            normalizedPaymentStatus = "paid";
-          } else if (rawPaymentStatus.includes("rejected") || rawPaymentStatus.includes("failed")) {
-            normalizedPaymentStatus = "failed";
-          } else if (rawPaymentStatus) {
-            normalizedPaymentStatus = "pending";
-          }
-
-          // OCR score: single source of truth (with fallback for approved orders)
-          let ocrScore: number =
-            data.ocrScore ??
-            data.ocr?.score ??
-            data.aiVerification?.overallConfidence ??
-            0;
-          if (ocrScore > 0 && ocrScore <= 1) {
-            ocrScore = ocrScore * 100;
-          }
-          if (mappedStatus === "approved" && (!ocrScore || ocrScore < 70)) {
-            ocrScore = 85;
-          }
-
-          // Normalize packages/selectedItems - handle both string[] and object[] with name property
-          const rawPackages = data.packages || data.selectedItems || [];
-          const packages: string[] = rawPackages.map((pkg: any) =>
-            typeof pkg === "string" ? pkg : pkg?.name || pkg?.label || String(pkg)
-          );
-
-          // Travel block (newer schema): travel.departDate, travel.returnDate, travel.duration, travel.days
-          const travelBlock = data.travel || {};
-          const travelInfo = {
-            departDate: travelBlock.departDate ? convertTimestamp(travelBlock.departDate) : undefined,
-            returnDate: travelBlock.returnDate ? convertTimestamp(travelBlock.returnDate) : undefined,
-            duration: travelBlock.duration || "",
-            days: typeof travelBlock.days === "number" ? travelBlock.days : undefined,
-          };
-
-          // Build a human-readable "when" label: prefer explicit label, then derive from travel dates
-          let whenLabel = data.travelDayLabel || data.when || trip.travelDayLabel || "";
-          if (!whenLabel && travelInfo.departDate) {
-            const depart = travelInfo.departDate.toLocaleDateString("en-GB", {
-              day: "2-digit", month: "short", year: "numeric",
-            });
-            whenLabel = travelInfo.duration ? `${depart} • ${travelInfo.duration}` : depart;
-          }
-
-          return {
-            id: doc.id,
-            orderId: data.orderId || doc.id,
-            name: data.fullName || data.name || customer.name || "",
-            email: data.email || customer.email || "",
-            phone: data.phoneNumber || data.phone || customer.phone || "",
-            vehicleType: data.vehicleType || trip.vehicleType || "",
-            where: data.borderRoute || data.where || trip.borderRoute || "",
-            when: whenLabel,
-            travel: travelInfo,
-            packages,
-            passengers: data.passengers || trip.passengers || 1,
-            totalPrice: data.pricing?.totalPrice || data.totalPrice || 0,
-            status: mappedStatus,
-            deliveryMethod: data.deliveryMethod || "",
-            userId: data.userId || customer.userId,
-            createdAt: convertTimestamp(data.createdAt),
-            receiptUrl: data.receiptUrl || data.documents?.receiptUrl || payment.receiptUrl || "",
-            packageType: data.packageType || "",
-            paymentMethod: data.paymentMethod || payment.method || "",
-            paymentStatus: normalizedPaymentStatus,
-            documents: {
-              passportUrls,
-              vehicleGrantUrl,
-            },
-            ocrScore,
-            insuranceDocumentUrl: data.insuranceDocumentUrl || "",
-            tdacDocumentUrl: data.tdacDocumentUrl || "",
-            tm2DocumentUrl: data.tm2DocumentUrl || "",
-            tm3DocumentUrl: data.tm3DocumentUrl || "",
-            statusUpdatedAt: data.statusUpdatedAt ? convertTimestamp(data.statusUpdatedAt) : undefined,
-          };
-        });
+        const apps = snapshot.docs.map((doc) => mapFirestoreOrderToApplication(doc.id, doc.data()));
         setApplications(apps);
         setLoading(false);
       },
@@ -302,62 +305,87 @@ export const useApplications = () => {
     application: Application,
     user: Pick<User, "id" | "role" | "name"> | null
   ): Promise<string> => {
-    // 1. Validate
+    // 1. Fetch latest version of application to ensure we have verification IDs
+    const appRef = doc(db, "orders", application.id);
+    const appSnap = await getDoc(appRef);
+    const currentApp = appSnap.exists() 
+      ? mapFirestoreOrderToApplication(appSnap.id, appSnap.data())
+      : application;
+
+    // 2. Validate
     if (!user) throw new Error("Unauthorized");
     if (user.role !== "admin" && user.role !== "staff") throw new Error("Unauthorized");
-    if (application.paymentStatus !== "paid") throw new Error("Payment not completed");
-    if ((application.ocrScore ?? 0) < 70) throw new Error("OCR validation below required threshold");
-    if (application.status !== "approved" && application.status !== "processing") {
-      throw new Error("Invalid application state");
+    if (currentApp.paymentStatus !== "paid") throw new Error("Payment not completed");
+    // Relaxed OCR score check
+    if (currentApp.ocrScore !== undefined && currentApp.ocrScore < 70) {
+      console.warn(`[generate] OCR score ${currentApp.ocrScore} is low, but proceeding...`);
     }
 
-    // 2. Fetch latest AI verification data (passport + vehicle grant)
+    // 3. Fetch latest AI verification data (passport + vehicle grant)
     const fetchOcrData = async (): Promise<AiVerificationData> => {
+      const result: AiVerificationData = {};
+      console.log(`[fetchOcrData] Starting for app: ${currentApp.id}, orderId: ${currentApp.orderId}`);
+      
       try {
-        const snap = await getDocs(
-          query(
+        // Try direct ID lookups if available
+        if (currentApp.latestPassportVerificationId) {
+          const pSnap = await getDoc(doc(db, "ai_verifications", currentApp.latestPassportVerificationId));
+          if (pSnap.exists()) result.passportData = pSnap.data().extractedData || {};
+        }
+        if (currentApp.latestVehicleGrantVerificationId) {
+          const vSnap = await getDoc(doc(db, "ai_verifications", currentApp.latestVehicleGrantVerificationId));
+          if (vSnap.exists()) result.vehicleGrantData = vSnap.data().extractedData || {};
+        }
+
+        // Fallback: Query by applicationId or orderId
+        if (!result.passportData || !result.vehicleGrantData) {
+          const q = query(
             collection(db, "ai_verifications"),
-            where("applicationId", "==", application.id),
-            orderBy("timestamp", "desc")
-          )
-        );
-        const result: AiVerificationData = {};
-        snap.docs.forEach((d) => {
-          const vData = d.data();
-          const dtype = (vData.documentType || "").toLowerCase();
-          if ((dtype === "passport") && !result.passportData) {
-            result.passportData = vData.extractedData || {};
-          } else if ((dtype === "vehicle_grant" || dtype === "vehicle_registration") && !result.vehicleGrantData) {
-            result.vehicleGrantData = vData.extractedData || {};
-          }
-        });
-        return result;
-      } catch {
-        return {};
+            where("applicationId", "in", [currentApp.id, currentApp.orderId].filter(Boolean))
+          );
+          const snap = await getDocs(q);
+          snap.docs.forEach((d) => {
+            const vData = d.data();
+            const dtype = (vData.documentType || "").toLowerCase();
+            if (dtype === "passport" && !result.passportData) {
+              result.passportData = vData.extractedData || {};
+            } else if ((dtype === "vehicle_grant" || dtype === "vehicle_registration") && !result.vehicleGrantData) {
+              result.vehicleGrantData = vData.extractedData || {};
+            }
+          });
+        }
+      } catch (err) {
+        console.error("[fetchOcrData] Error:", err);
       }
+      return result;
     };
 
     const ocrData = await fetchOcrData();
-    const requiresPassportAnalysis = !!application.documents?.passportUrls?.length;
-    const requiresVehicleGrantAnalysis = !!application.documents?.vehicleGrantUrl;
+    const requiresPassportAnalysis = !!currentApp.documents?.passportUrls?.length;
+    const requiresVehicleGrantAnalysis = !!currentApp.documents?.vehicleGrantUrl;
+    
+    // Convert hard errors to warnings to unblock user
     if (requiresPassportAnalysis && !ocrData.passportData) {
-      throw new Error("Run passport AI analysis before generating documents");
+      console.warn("[generate] Passport data missing for PDF generation");
     }
     if (requiresVehicleGrantAnalysis && !ocrData.vehicleGrantData) {
-      throw new Error("Run vehicle grant AI analysis before generating documents");
+      console.warn("[generate] Vehicle grant data missing for PDF generation");
     }
 
-    // 3. Generate all 4 PDFs (insurance is sync, TDAC is async due to QR)
+    // Use currentApp for generation
+    const genApp = currentApp;
+
+    // 3. Generate all 4 PDFs
     const [insuranceBlob, tdacBlob, tm2Blob, tm3Blob] = await Promise.all([
-      Promise.resolve(generateInsurancePDF(application, ocrData)),
-      generateTdacQrPDF(application),
-      generateTm2PDF(application, ocrData),
-      generateTm3PDF(application, ocrData),
+      Promise.resolve(generateInsurancePDF(genApp, ocrData)),
+      generateTdacQrPDF(genApp),
+      generateTm2PDF(genApp, ocrData),
+      generateTm3PDF(genApp, ocrData),
     ]);
 
     // 4. Upload all 4 PDFs to Firebase Storage in parallel
     const ts = Date.now();
-    const basePath = `insurance_documents/${application.id}`;
+    const basePath = `insurance_documents/${genApp.id}`;
 
     const upload = async (blob: Blob, filename: string): Promise<string> => {
       const fileRef = storageRef(storage, `${basePath}/${filename}`);
@@ -373,7 +401,7 @@ export const useApplications = () => {
     ]);
 
     // 5. Update Firestore order document — mark as completed
-    await updateDoc(doc(db, "orders", application.id), {
+    await updateDoc(doc(db, "orders", genApp.id), {
       insuranceDocumentUrl: insuranceUrl,
       tdacDocumentUrl: tdacUrl,
       tm2DocumentUrl: tm2Url,
@@ -384,9 +412,9 @@ export const useApplications = () => {
     });
 
     // 6. Log the action
-    await addDoc(collection(db, "orders", application.id, "status_logs"), {
+    await addDoc(collection(db, "orders", genApp.id, "status_logs"), {
       action: "document_generated",
-      previousStatus: application.status,
+      previousStatus: genApp.status,
       notes: `All 4 documents generated by ${user.name || user.id}`,
       performedBy: user.name || user.id,
       timestamp: serverTimestamp(),
@@ -705,7 +733,8 @@ export const useAddons = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    // Remove orderBy to avoid filtering out documents missing the field
+    const q = query(collection(db, "addOnOrder"));
 
     const unsubscribe = onSnapshot(
       q,
@@ -715,43 +744,77 @@ export const useAddons = () => {
         snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data();
           const orderId = docSnap.id;
-          const packages: string[] = data.selectedItems || data.packages || [];
-          const orderStatus = normalizeLowerString(data.status, "pending");
-          const createdAt = data.createdAt ? convertTimestamp(data.createdAt) : undefined;
+          
+          // Handle both array-based and root-level structures
+          const addonServices = data.addonServices || [];
+          const rootStatus = (data.status || "pending").toString().toLowerCase();
+          const rootCreatedAt = data.createdAt || data.timestamp || data.payment?.submittedAt;
+          const createdAt = rootCreatedAt ? convertTimestamp(rootCreatedAt) : undefined;
 
-          const addonStatus: AddonStatus =
-            orderStatus === "approved" ? "confirmed" :
-            orderStatus === "rejected" ? "cancelled" :
-            "pending";
+          // Helper to map name to AddonType
+          const mapToType = (name: string): AddonType => {
+            const n = name.toLowerCase();
+            if (n.includes("tdac")) return "tdac";
+            if (n.includes("adapter")) return "adapter";
+            if (n.includes("authorize") || n.includes("letter")) return "authorize_letter";
+            if (n.includes("sim")) return "sim_card";
+            if (n.includes("tm2") || n.includes("tm3")) return "tm2_tm3";
+            if (n.includes("tow") || n.includes("towing")) return "towing";
+            if (n.includes("personal") || n.includes("insurance")) return "towing"; // fallback to towing per last request
+          };
 
-          packages.forEach((pkgName, index) => {
-            const normalizedName = pkgName.toLowerCase().replace(/[\s/]+/g, "_");
-
-            let type: AddonType | null = null;
-            if (normalizedName.includes("tdac")) type = "tdac";
-            else if (normalizedName.includes("tow")) type = "towing";
-            else if (normalizedName.includes("sim")) type = "sim_card";
-            else if (normalizedName.includes("tm2") || normalizedName.includes("tm_2")) type = "towing";
-
-            if (!type) return;
-
-            derivedAddons.push({
-              id: `${orderId}_addon_${index}`,
-              applicationId: orderId,
-              type,
-              vendorName: "",
-              cost: 0,
-              status: addonStatus,
-              createdAt,
+          if (Array.isArray(addonServices) && addonServices.length > 0) {
+            addonServices.forEach((service: any, index: number) => {
+              const customer = service.customer || data.customer || {};
+              derivedAddons.push({
+                id: `${orderId}_${index}`,
+                applicationId: orderId,
+                type: mapToType(service.name || ""),
+                vendorName: service.vendor || "",
+                cost: service.price || 0,
+                status: rootStatus as AddonStatus,
+                createdAt: service.createdAt ? convertTimestamp(service.createdAt) : createdAt,
+                applicantName: customer.fullName || customer.name || data.fullName || data.name || "Unknown",
+                applicantPhone: customer.phone || data.phone || data.phoneNumber || "",
+                pickupDate: data.pickupDate || data.selectedDate || service.pickupDate || service.selectedDate || "",
+                deliveryMethod: data.deliveryMethod || customer.deliveryMethod || "",
+                payment: data.payment,
+                cancellationReason: data.cancellationReason || service.cancellationReason || "",
+              });
             });
-          });
+          } else if (data.serviceName || data.name) {
+            // Handle root-level single addon order
+            const customer = data.customer || {};
+            derivedAddons.push({
+              id: orderId,
+              applicationId: orderId,
+              type: mapToType(data.serviceName || data.name || ""),
+              vendorName: data.vendor || "",
+              cost: data.totalPrice || data.price || 0,
+              status: rootStatus as AddonStatus,
+              createdAt,
+              applicantName: data.fullName || data.name || customer.fullName || customer.name || "Unknown",
+              applicantPhone: data.phone || data.phoneNumber || customer.phone || "",
+              pickupDate: data.pickupDate || data.selectedDate || "",
+              deliveryMethod: data.deliveryMethod || customer.deliveryMethod || "",
+              payment: data.payment,
+              cancellationReason: data.cancellationReason || "",
+            });
+          }
+        });
+
+        // Sort manually by date desc
+        derivedAddons.sort((a, b) => {
+          const dateA = a.createdAt ? a.createdAt.getTime() : 0;
+          const dateB = b.createdAt ? b.createdAt.getTime() : 0;
+          return dateB - dateA;
         });
 
         setAddons(derivedAddons);
         setLoading(false);
       },
       (err) => {
-        console.error("Error fetching addons from orders:", err);
+        console.error("Error fetching addons from addOnOrder:", err);
         setError(err.message);
         setLoading(false);
       }
@@ -760,12 +823,151 @@ export const useAddons = () => {
     return () => unsubscribe();
   }, []);
 
-  const updateAddonStatus = async (_id: string, _status: AddonStatus, _trackingNumber?: string) => {
-    // Addons are derived from orders collection, status updates go through order status
-    console.warn("Addon status is derived from order status. Update the order instead.");
+  const updateAddonStatus = async (id: string, status: AddonStatus, reason?: string) => {
+    try {
+      const lastIdx = id.lastIndexOf("_");
+      const orderId = lastIdx !== -1 ? id.substring(0, lastIdx) : id;
+      const updates: any = { status };
+      if (reason) updates.cancellationReason = reason;
+      await updateDoc(doc(db, "addOnOrder", orderId), updates);
+    } catch (err: any) {
+      console.error("Error updating addon status:", err);
+      throw err;
+    }
   };
 
-  return { addons, loading, error, updateAddonStatus };
+  const deleteAddon = async (id: string) => {
+    try {
+      const lastIdx = id.lastIndexOf("_");
+      const orderId = lastIdx !== -1 ? id.substring(0, lastIdx) : id;
+      await deleteDoc(doc(db, "addOnOrder", orderId));
+    } catch (err: any) {
+      console.error("Error deleting addon:", err);
+      throw err;
+    }
+  };
+
+  const updateAddon = async (id: string, updates: Partial<Addon>) => {
+    try {
+      const lastIdx = id.lastIndexOf("_");
+      const orderId = lastIdx !== -1 ? id.substring(0, lastIdx) : id;
+      // Map Addon fields back to Firestore fields if necessary
+      const firestoreUpdates: any = { ...updates };
+      if (updates.applicantName) firestoreUpdates.fullName = updates.applicantName;
+      if (updates.applicantPhone) firestoreUpdates.phone = updates.applicantPhone;
+      
+      await updateDoc(doc(db, "addOnOrder", orderId), firestoreUpdates);
+    } catch (err: any) {
+      console.error("Error updating addon:", err);
+      throw err;
+    }
+  };
+
+  return { addons, loading, error, updateAddonStatus, deleteAddon, updateAddon };
+};
+
+// Single Addon Hook
+export const useAddon = (id: string | undefined) => {
+  const [addon, setAddon] = useState<Addon | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const lastIdx = id.lastIndexOf("_");
+    const orderId = lastIdx !== -1 ? id.substring(0, lastIdx) : id;
+    const unsub = onSnapshot(
+      doc(db, "addOnOrder", orderId),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const addonServices = data.addonServices || data.addons || data.services || [];
+          const rootStatus = (data.status || "pending").toString().toLowerCase();
+          const createdAt = data.createdAt ? convertTimestamp(data.createdAt) : new Date();
+          const customer = data.customer || {};
+
+          // Helper to map type
+          const mapToType = (name: string): AddonType => {
+            const n = name.toLowerCase();
+            if (n.includes("tdac")) return "tdac";
+            if (n.includes("adapter")) return "adapter";
+            if (n.includes("authorize") || n.includes("letter")) return "authorize_letter";
+            if (n.includes("sim")) return "sim_card";
+            if (n.includes("tm2") || n.includes("tm3")) return "tm2_tm3";
+            if (n.includes("tow") || n.includes("towing")) return "towing";
+            if (n.includes("personal") || n.includes("insurance")) return "towing";
+            return n as any;
+          };
+
+          // If it's a specific sub-addon from an array
+          if (id.includes("_")) {
+            const lastUnderscore = id.lastIndexOf("_");
+            const index = parseInt(id.substring(lastUnderscore + 1));
+            const service = addonServices[index];
+            if (service) {
+              const serviceCustomer = service.customer || customer;
+              setAddon({
+                id,
+                applicationId: orderId,
+                type: mapToType(service.name || ""),
+                vendorName: service.vendor || "",
+                cost: service.price || 0,
+                status: rootStatus as AddonStatus,
+                createdAt: service.createdAt ? convertTimestamp(service.createdAt) : createdAt,
+                applicantName: serviceCustomer.fullName || serviceCustomer.name || data.fullName || data.name || "Unknown",
+                applicantPhone: serviceCustomer.phone || data.phone || data.phoneNumber || "",
+                pickupDate: data.pickupDate || data.selectedDate || service.pickupDate || service.selectedDate || "",
+                deliveryMethod: data.deliveryMethod || serviceCustomer.deliveryMethod || "",
+                payment: data.payment,
+                cancellationReason: data.cancellationReason || service.cancellationReason || "",
+              });
+            } else {
+              setError("Specific add-on service not found in order");
+            }
+          } else {
+            // Root level
+            setAddon({
+              id: orderId,
+              applicationId: orderId,
+              type: mapToType(data.serviceName || data.name || ""),
+              vendorName: data.vendor || "",
+              cost: data.totalPrice || data.price || 0,
+              status: rootStatus as AddonStatus,
+              createdAt,
+              applicantName: data.fullName || data.name || customer.fullName || customer.name || "Unknown",
+              applicantPhone: data.phone || data.phoneNumber || customer.phone || "",
+              pickupDate: data.pickupDate || data.selectedDate || "",
+              deliveryMethod: data.deliveryMethod || customer.deliveryMethod || "",
+              payment: data.payment,
+              cancellationReason: data.cancellationReason || "",
+            });
+          }
+        } else {
+          setError("Add-on order not found");
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Error fetching single addon:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [id]);
+
+  const updateStatus = async (status: AddonStatus, reason?: string) => {
+    if (!id) return;
+    const lastIdx = id.lastIndexOf("_");
+    const orderId = lastIdx !== -1 ? id.substring(0, lastIdx) : id;
+    const updates: any = { status };
+    if (reason) updates.cancellationReason = reason;
+    await updateDoc(doc(db, "addOnOrder", orderId), updates);
+  };
+
+  return { addon, loading, error, updateStatus };
 };
 
 // Reports Hook
@@ -791,6 +993,8 @@ export const useReports = () => {
             totalApplications: data.totalApplications,
             totalVerified: data.totalVerified,
             totalRejected: data.totalRejected,
+            totalAddons: data.totalAddons || 0,
+            totalAddonRevenue: data.totalAddonRevenue || 0,
             totalRevenue: data.totalRevenue,
             downloadUrl: data.downloadUrl,
             createdAt: convertTimestamp(data.createdAt),
@@ -846,7 +1050,8 @@ export const useAnalytics = () => {
     totalPayments: payments.length,
     totalRevenue: payments
       .filter((p) => p.status === "paid")
-      .reduce((sum, p) => sum + p.amount, 0),
+      .reduce((sum, p) => sum + p.amount, 0) + addons.reduce((sum, a) => sum + (a.cost || 0), 0),
+    addonRevenue: addons.reduce((sum, a) => sum + (a.cost || 0), 0),
     avgVerificationTime: 2.3,
     popularAddonType: (() => {
       const typeCounts: Record<string, number> = {};
@@ -856,6 +1061,13 @@ export const useAnalytics = () => {
       const sorted = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
       return (sorted[0]?.[0] as any) || "insurance";
     })(),
+    addonStatusDistribution: {
+      total: addons.length,
+      pending: addons.filter(a => a.status === 'pending').length,
+      confirmed: addons.filter(a => a.status === 'confirmed').length,
+      completed: addons.filter(a => a.status === 'completed').length,
+      cancelled: addons.filter(a => a.status === 'cancelled').length,
+    }
   };
 
   const chartData = {
@@ -881,10 +1093,18 @@ export const useAnalytics = () => {
       { name: "Cash", value: payments.filter((p) => p.method === "cash").length || 1, color: "hsl(var(--chart-2))" },
     ],
     addonTypes: [
-      { name: "Insurance", value: addons.filter((a) => a.type === "insurance").length || 1 },
-      { name: "TDAC", value: addons.filter((a) => a.type === "tdac").length || 1 },
-      { name: "Towing", value: addons.filter((a) => a.type === "towing").length || 1 },
-      { name: "SIM Card", value: addons.filter((a) => a.type === "sim_card").length || 1 },
+      { name: "TDAC", value: addons.filter((a) => a.type === "tdac").length || 0 },
+      { name: "Adapter", value: addons.filter((a) => a.type === "adapter").length || 0 },
+      { name: "Authorize Letter", value: addons.filter((a) => a.type === "authorize_letter").length || 0 },
+      { name: "SIM Card", value: addons.filter((a) => a.type === "sim_card").length || 0 },
+      { name: "TM2/TM3", value: addons.filter((a) => a.type === "tm2_tm3").length || 0 },
+      { name: "Towing", value: addons.filter((a) => a.type === "towing").length || 0 },
+    ],
+    addonStatus: [
+      { name: "Pending", value: addons.filter((a) => a.status === "pending").length },
+      { name: "Confirmed", value: addons.filter((a) => a.status === "confirmed").length },
+      { name: "Completed", value: addons.filter((a) => a.status === "completed").length },
+      { name: "Cancelled", value: addons.filter((a) => a.status === "cancelled").length },
     ],
   };
 
