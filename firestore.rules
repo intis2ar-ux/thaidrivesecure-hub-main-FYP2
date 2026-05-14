@@ -62,6 +62,14 @@ service cloud.firestore {
       allow delete: if request.auth != null && get(/databases/$(database)/documents/userWdboard/$(request.auth.uid)).data.role == "admin";
     }
 
+    // ✅ ADDON ORDERS COLLECTION
+    match /addOnOrder/{docId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if true;
+      allow delete: if request.auth != null;
+    }
+
   }
 
 }
