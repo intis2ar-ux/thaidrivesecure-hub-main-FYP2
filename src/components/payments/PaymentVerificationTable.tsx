@@ -34,7 +34,6 @@ interface PaymentVerificationTableProps {
   onVerify: (payment: Payment) => void;
   onReject: (payment: Payment) => void;
   onViewReceipt: (payment: Payment) => void;
-  onRequestUpdate: (payment: Payment) => void;
 }
 
 const onlineStatusMap: Record<PaymentVerificationStatus, { label: string; variant: "pending" | "approved" | "rejected" | "info" | "warning" }> = {
@@ -75,7 +74,6 @@ export const PaymentVerificationTable = ({
   onVerify,
   onReject,
   onViewReceipt,
-  onRequestUpdate,
 }: PaymentVerificationTableProps) => {
   const getSortIcon = () => {
     if (sortOrder === "desc") return <ArrowDown className="h-4 w-4" />;
@@ -186,11 +184,6 @@ export const PaymentVerificationTable = ({
                   {payment.verificationStatus === "verified" && (
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => onViewReceipt(payment)} title="View Receipt">
                       <Receipt className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {payment.verificationStatus === "rejected" && (
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => onRequestUpdate(payment)} title="Request Update">
-                      <FileEdit className="h-4 w-4" />
                     </Button>
                   )}
                   {payment.verificationStatus === "updated" && (

@@ -1,3 +1,5 @@
+import { initializeApp, deleteApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { useState, useEffect } from "react";
 import {
   collection,
@@ -7,6 +9,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
   addDoc,
   deleteDoc,
   getDocs,
@@ -17,7 +20,7 @@ import {
 } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
-import { db, storage, functions } from "@/lib/firebase";
+import { db, storage, functions, firebaseConfig } from "@/lib/firebase";
 import {
   Application,
   AIVerification,
@@ -31,6 +34,9 @@ import {
   AddonType,
   User,
   CashCollectionDetails,
+  StaffAccount,
+  UserRole,
+  UserStatus,
 } from "@/types";
 import { generateInsurancePDF } from "@/lib/insuranceDocument";
 import { generateTdacQrPDF } from "@/lib/tdacQrDocument";
@@ -90,6 +96,8 @@ const mapFirestoreOrderToApplication = (id: string, data: any): Application => {
     mappedStatus = "approved";
   } else if (rawStatus.includes("rejected") || rawStatus.includes("cancelled")) {
     mappedStatus = "rejected";
+  } else if (rawStatus.includes("reupload_required")) {
+    mappedStatus = "REUPLOAD_REQUIRED";
   }
 
   // Normalize paymentStatus
@@ -161,6 +169,7 @@ const mapFirestoreOrderToApplication = (id: string, data: any): Application => {
     passengers: data.passengers || trip.passengers || 1,
     totalPrice: data.pricing?.totalPrice || data.totalPrice || 0,
     status: mappedStatus,
+    reuploadRequested: data.reuploadRequested || false,
     deliveryMethod: data.deliveryMethod || "",
     userId: data.userId || customer.userId,
     createdAt: convertTimestamp(data.createdAt),
@@ -423,6 +432,100 @@ export const useApplications = () => {
     return insuranceUrl;
   };
 
+  const requestReupload = async (
+    orderId: string,
+    type: "passport" | "vehicleGrant",
+    request: {
+      reason: string;
+      notes?: string;
+      staffId: string;
+    }
+  ) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      
+      // Update order status — store document type so mobile app knows which doc to show
+      await updateDoc(orderRef, {
+        status: "REUPLOAD_REQUIRED",
+        reuploadRequested: true,
+        reuploadDocumentType: type, // "passport" | "vehicleGrant"
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add/update reupload request in sub-collection
+      const subRef = doc(db, "orders", orderId, "reupload_requests", type);
+      await setDoc(subRef, {
+        requested: true,
+        documentType: type, // also store here for sub-collection queries
+        reason: request.reason,
+        notes: request.notes || "",
+        status: "PENDING",
+        requestedBy: request.staffId,
+        requestedAt: serverTimestamp(),
+      });
+
+      // Add status log
+      await addDoc(collection(db, "orders", orderId, "status_logs"), {
+        action: "REQUEST_REUPLOAD",
+        documentType: type === "vehicleGrant" ? "vehicle_grant" : "passport",
+        notes: request.notes || `Re-upload requested for ${type}: ${request.reason}`,
+        performedBy: request.staffId,
+        staffId: request.staffId,
+        timestamp: serverTimestamp(),
+      });
+    } catch (err: any) {
+      console.error("Error requesting re-upload:", err);
+      throw err;
+    }
+  };
+
+  /**
+   * verifyReupload
+   * Called after staff reviews the re-uploaded documents and confirms they are acceptable.
+   * - Marks all pending reupload_requests sub-docs as COMPLETED
+   * - Clears the reuploadRequested flag on the main order
+   * - Sets status back to "pending" so the payment flow can continue
+   */
+  const verifyReupload = async (orderId: string, staffId: string) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+
+      // Mark all pending sub-collection requests as COMPLETED
+      const reqCol = collection(db, "orders", orderId, "reupload_requests");
+      const reqSnap = await getDocs(reqCol);
+      const markDone = reqSnap.docs
+        .filter((d) => d.data().status === "PENDING")
+        .map((d) =>
+          updateDoc(d.ref, {
+            status: "COMPLETED",
+            resolvedAt: serverTimestamp(),
+            resolvedBy: staffId,
+          })
+        );
+      await Promise.all(markDone);
+
+      // Clear the flags on the main order and move to pending (ready for payment)
+      await updateDoc(orderRef, {
+        status: "pending",
+        reuploadRequested: false,
+        reuploadDocumentType: null,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Log the action
+      await addDoc(collection(db, "orders", orderId, "status_logs"), {
+        action: "REUPLOAD_VERIFIED",
+        notes: "Staff reviewed re-uploaded documents and approved them.",
+        performedBy: staffId,
+        staffId,
+        timestamp: serverTimestamp(),
+      });
+    } catch (err: any) {
+      console.error("Error verifying re-upload:", err);
+      throw err;
+    }
+  };
+
   return {
     applications,
     loading,
@@ -431,7 +534,109 @@ export const useApplications = () => {
     updateApplicationFields,
     deleteApplication,
     generateAndStoreInsuranceDocument,
+    requestReupload,
+    verifyReupload,
   };
+};
+
+export const useReuploadRequests = (orderId: string | undefined) => {
+  const [requests, setRequests] = useState<Record<string, any>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!orderId) {
+      setLoading(false);
+      return;
+    }
+
+    const q = collection(db, "orders", orderId, "reupload_requests");
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data: Record<string, any> = {};
+      snapshot.docs.forEach((doc) => {
+        data[doc.id] = {
+          ...doc.data(),
+          requestedAt: convertTimestamp(doc.data().requestedAt),
+        };
+      });
+      setRequests(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [orderId]);
+
+  return { requests, loading };
+};
+
+/**
+ * useReuploadNotifications
+ * Listens globally to orders with status=REUPLOAD_REQUIRED and fires onReuploadReceived
+ * when the customer uploads a new document (detected by updatedAt change and new doc URLs).
+ * Only triggers AFTER initial load to avoid false positives on mount.
+ */
+export const useReuploadNotifications = (
+  onReuploadReceived: (orderId: string, orderRef: string, customerName: string, docType: string) => void
+) => {
+  useEffect(() => {
+    let initialized = false;
+    // Track doc URL snapshots to detect new uploads
+    const prevSnapshots: Record<string, { passportCount: number; vehicleGrantUrl: string }> = {};
+
+    const q = query(
+      collection(db, "orders"),
+      where("status", "==", "REUPLOAD_REQUIRED")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!initialized) {
+        // Seed the initial state — don't fire toasts on first load
+        snapshot.docs.forEach((docSnap) => {
+          const d = docSnap.data();
+          const passportUrls = d.documents?.passportUrls || d.passportUrls || [];
+          const vehicleGrantUrl = d.documents?.vehicleGrantUrl || d.vehicleGrantUrl || "";
+          prevSnapshots[docSnap.id] = {
+            passportCount: passportUrls.length,
+            vehicleGrantUrl,
+          };
+        });
+        initialized = true;
+        return;
+      }
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== "modified") return;
+
+        const d = change.doc.data();
+        const docId = change.doc.id;
+        const orderRef = d.orderId || docId;
+        const customerName = d.fullName || d.name || d.customer?.name || "Customer";
+
+        const passportUrls: string[] = d.documents?.passportUrls || d.passportUrls || [];
+        const vehicleGrantUrl: string = d.documents?.vehicleGrantUrl || d.vehicleGrantUrl || "";
+
+        const prev = prevSnapshots[docId];
+
+        if (prev) {
+          // Detect new passport upload (count increased)
+          if (passportUrls.length > prev.passportCount) {
+            onReuploadReceived(docId, orderRef, customerName, "Passport");
+          }
+          // Detect new vehicle grant upload (URL changed to a new value)
+          if (vehicleGrantUrl && vehicleGrantUrl !== prev.vehicleGrantUrl) {
+            onReuploadReceived(docId, orderRef, customerName, "Vehicle Grant");
+          }
+        }
+
+        // Update snapshot baseline
+        prevSnapshots[docId] = {
+          passportCount: passportUrls.length,
+          vehicleGrantUrl,
+        };
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
 };
 
 // AI Verifications Hook
@@ -1109,4 +1314,121 @@ export const useAnalytics = () => {
   };
 
   return { analytics, chartData };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Staff Management Hook (Optimized for staff_accounts collection)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const useStaff = (adminUid?: string) => {
+  const [staff, setStaff] = useState<StaffAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!adminUid) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(collection(db, "userWdboard"));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log(`[useStaff] Fetched ${snapshot.docs.length} documents from userWdboard`);
+        const list = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          console.log(`[useStaff] Document ${docSnap.id}:`, d);
+          return {
+            uid: docSnap.id,
+            fullName: d.name || d.fullName || "",
+            email: d.email || "",
+            role: d.role || "staff",
+            phoneNumber: d.phoneNumber || "",
+            status: d.status || "active",
+            createdAt: d.createdAt ? convertTimestamp(d.createdAt) : new Date(0), // Default to epoch if missing
+            createdBy: d.createdBy || "",
+            lastLogin: d.lastLogin ? convertTimestamp(d.lastLogin) : new Date(0),
+            avatarUrl: d.avatarUrl || d.avatar || "",
+          } as StaffAccount;
+        });
+        
+        // Sort in memory to avoid excluding documents without createdAt field
+        list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        
+        setStaff(list);
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        console.error("[useStaff] Error:", err);
+        setError("Missing or insufficient permissions to access staff accounts.");
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [adminUid]);
+
+  const createStaff = async (payload: {
+    fullName: string;
+    email: string;
+    password: string;
+    role: UserRole;
+    phoneNumber: string;
+    status: UserStatus;
+    createdBy: string;
+  }) => {
+    const tempAppName = `staff-reg-${Date.now()}`;
+    const tempApp = initializeApp(firebaseConfig, tempAppName);
+    const tempAuth = getAuth(tempApp);
+
+    try {
+      const cred = await createUserWithEmailAndPassword(tempAuth, payload.email, payload.password);
+      const uid = cred.user.uid;
+
+      const newAccount: any = {
+        name: payload.fullName,
+        email: payload.email,
+        role: payload.role,
+        phoneNumber: payload.phoneNumber,
+        status: payload.status,
+        createdAt: serverTimestamp(),
+        createdBy: payload.createdBy,
+        lastLogin: serverTimestamp(),
+        avatarUrl: "",
+      };
+
+      await setDoc(doc(db, "userWdboard", uid), newAccount);
+
+      await tempAuth.signOut();
+      await deleteApp(tempApp);
+      return { success: true, uid };
+    } catch (err: any) {
+      try { await deleteApp(tempApp); } catch {}
+      throw err;
+    }
+  };
+
+  const updateStaff = async (uid: string, updates: Partial<StaffAccount>) => {
+    const firestoreUpdates: any = { ...updates, updatedAt: serverTimestamp() };
+    
+    // Map fullName back to name for userWdboard
+    if (updates.fullName) {
+      firestoreUpdates.name = updates.fullName;
+      delete firestoreUpdates.fullName;
+    }
+
+    if (updates.createdAt) delete firestoreUpdates.createdAt;
+    
+    await updateDoc(doc(db, "userWdboard", uid), firestoreUpdates);
+  };
+
+  const deleteStaff = async (uid: string) => {
+    await deleteDoc(doc(db, "userWdboard", uid));
+    // Auth deletion still requires Admin SDK, but this removes them from the system list.
+  };
+
+  return { staff, loading, error, createStaff, updateStaff, deleteStaff };
 };

@@ -17,10 +17,12 @@ import Reports from "./pages/Reports";
 
 
 import Profile from "./pages/Profile";
+import StaffManagement from "./pages/StaffManagement";
 
 
 
 import NotFound from "./pages/NotFound";
+import { ReuploadWatcher } from "./components/ReuploadWatcher";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +32,7 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
+        <ReuploadWatcher />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Login />} />
@@ -47,6 +50,7 @@ const App = () => (
             
 
             <Route path="/profile" element={<Profile />} />
+            <Route path="/staff-management" element={<StaffManagement />} />
             <Route path="/order-status/:orderId" element={<OrderStatus />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

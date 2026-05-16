@@ -158,18 +158,6 @@ const Payments = () => {
     }
   };
 
-  const handleRequestUpdate = async (paymentId: string, notes: string) => {
-    try {
-      await updatePaymentVerification(paymentId, "payment_request_update", {
-        notes,
-        performedBy: user?.name || "Unknown",
-      });
-      toast.info("Update request sent to customer");
-    } catch (err) {
-      toast.error("Failed to send update request");
-    }
-  };
-
   const handleScheduleCollection = async (paymentId: string, details: CashCollectionDetails, notes: string) => {
     try {
       await updatePaymentVerification(paymentId, "payment_collection_scheduled", {
@@ -371,7 +359,6 @@ const Payments = () => {
                   onVerify={quickVerify}
                   onReject={quickReject}
                   onViewReceipt={openReceipt}
-                  onRequestUpdate={(p) => { setSelectedPayment(p); setDetailOpen(true); }}
                 />
 
                 {/* Pagination */}
@@ -430,7 +417,6 @@ const Payments = () => {
                       onVerify={quickVerify}
                       onReject={quickReject}
                       onViewReceipt={openReceipt}
-                      onRequestUpdate={(p) => { setSelectedPayment(p); setDetailOpen(true); }}
                     />
 
                     {/* Pagination */}
@@ -472,7 +458,6 @@ const Payments = () => {
         onOpenChange={setDetailOpen}
         onVerify={handleVerify}
         onReject={handleReject}
-        onRequestUpdate={handleRequestUpdate}
         onScheduleCollection={handleScheduleCollection}
         onMarkCashReceived={handleMarkCashReceived}
       />

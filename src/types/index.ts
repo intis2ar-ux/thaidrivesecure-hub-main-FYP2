@@ -1,12 +1,31 @@
 export type UserRole = "admin" | "staff";
 
+export type UserStatus = "active" | "disabled";
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
-  lastLogin: Date;
+  lastLogin?: Date;
   avatar?: string;
+  status?: UserStatus;
+  phoneNumber?: string;
+  createdAt?: Date;
+  createdBy?: string;
+}
+
+export interface StaffAccount {
+  uid: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  phoneNumber: string;
+  status: UserStatus;
+  createdAt: Date;
+  createdBy: string;
+  lastLogin: Date;
+  avatarUrl?: string;
 }
 
 export type ApplicationStatus =
@@ -16,7 +35,17 @@ export type ApplicationStatus =
   | "processing"
   | "document_generated"
   | "completed"
-  | "rejected";
+  | "rejected"
+  | "REUPLOAD_REQUIRED";
+
+export interface ReuploadRequest {
+  requested: boolean;
+  reason: string;
+  notes?: string;
+  status: "PENDING" | "COMPLETED";
+  requestedBy: string;
+  requestedAt: Date;
+}
 
 export interface Application {
   id: string;
@@ -49,6 +78,11 @@ export interface Application {
     passportUrls?: string[];
     vehicleGrantUrl?: string;
   };
+  reuploadRequests?: {
+    passport?: ReuploadRequest;
+    vehicleGrant?: ReuploadRequest;
+  };
+  reuploadRequested?: boolean;
   ocrScore?: number;
   insuranceDocumentUrl?: string;
   tdacDocumentUrl?: string;

@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyBir1Z0Cjk6pbF1byF7OaniBsp-spIynDg",
   authDomain: "thaidrive-b7eb4.firebaseapp.com",
   projectId: "thaidrive-b7eb4",

@@ -20,7 +20,9 @@ type StatusVariant =
   | "cash_received"
   | "updated"
   | "processing"
-  | "document_generated";
+  | "document_generated"
+  | "REUPLOAD_REQUIRED"
+  | "REQUEST_REUPLOAD";
 
 interface StatusBadgeProps {
   variant: StatusVariant;
@@ -69,6 +71,10 @@ const variantStyles: Record<StatusVariant, string> = {
     "bg-primary/12 text-primary border-primary/25",
   document_generated:
     "bg-accent/12 text-accent border-accent/25",
+  REUPLOAD_REQUIRED:
+    "bg-orange-500/12 text-orange-600 border-orange-500/25",
+  REQUEST_REUPLOAD:
+    "bg-orange-500/12 text-orange-600 border-orange-500/25",
 };
 
 export const StatusBadge = ({

@@ -13,7 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCircle,
-  
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -122,35 +122,70 @@ export const Sidebar = () => {
       {/* Bottom Section */}
       <div className="px-2 py-3 border-t border-sidebar-border space-y-1">
 
-        {!collapsed && user && (
-          <NavLink
-            to="/profile"
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150",
-              location.pathname === "/profile"
-                ? "bg-sidebar-accent text-sidebar-primary"
-                : "text-sidebar-foreground/65 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+        {user && (
+          <>
+            {!collapsed ? (
+              <NavLink
+                to="/profile"
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150",
+                  location.pathname === "/profile"
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-sidebar-foreground/65 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                )}
+              >
+                <UserCircle className="h-4 w-4 flex-shrink-0" />
+                <div className="overflow-hidden min-w-0">
+                  <p className="text-[13px] font-medium truncate">{user.name}</p>
+                  <p className="text-[10px] text-sidebar-foreground/40 capitalize">{user.role}</p>
+                </div>
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/profile"
+                className={cn(
+                  "flex items-center justify-center p-2 rounded-lg transition-all duration-150",
+                  location.pathname === "/profile"
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-sidebar-foreground/65 hover:text-sidebar-foreground"
+                )}
+              >
+                <UserCircle className="h-4 w-4" />
+              </NavLink>
             )}
-          >
-            <UserCircle className="h-4 w-4 flex-shrink-0" />
-            <div className="overflow-hidden min-w-0">
-              <p className="text-[13px] font-medium truncate">{user.name}</p>
-              <p className="text-[10px] text-sidebar-foreground/40 capitalize">{user.role}</p>
-            </div>
-          </NavLink>
+          </>
         )}
-        {collapsed && (
-          <NavLink
-            to="/profile"
-            className={cn(
-              "flex items-center justify-center p-2 rounded-lg transition-all duration-150",
-              location.pathname === "/profile"
-                ? "bg-sidebar-accent text-sidebar-primary"
-                : "text-sidebar-foreground/65 hover:text-sidebar-foreground"
+
+        {/* Manage Staff Accounts (Admin Only) */}
+        {user?.role === "admin" && (
+          <>
+            {!collapsed ? (
+              <NavLink
+                to="/staff-management"
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150",
+                  location.pathname === "/staff-management"
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-sidebar-foreground/65 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                )}
+              >
+                <Users className="h-4 w-4 flex-shrink-0" />
+                <span className="text-[13px] font-medium">Manage Staffs</span>
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/staff-management"
+                className={cn(
+                  "flex items-center justify-center p-2 rounded-lg transition-all duration-150",
+                  location.pathname === "/staff-management"
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-sidebar-foreground/65 hover:text-sidebar-foreground"
+                )}
+              >
+                <Users className="h-4 w-4" />
+              </NavLink>
             )}
-          >
-            <UserCircle className="h-4 w-4" />
-          </NavLink>
+          </>
         )}
         <Button
           variant="ghost"

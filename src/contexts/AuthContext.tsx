@@ -43,15 +43,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const fetchUserProfile = async (uid: string): Promise<User | null> => {
     try {
       const userDoc = await getDocFromServer(doc(db, "userWdboard", uid));
+
       if (userDoc.exists()) {
         const data = userDoc.data();
         return {
           id: uid,
           email: data.email,
-          name: data.name,
+          name: data.fullName || data.name || "",
           role: data.role as UserRole,
           lastLogin: data.lastLogin?.toDate() || new Date(),
-          avatar: data.avatar,
+          avatar: data.avatarUrl || data.avatar,
+          status: data.status,
+          phoneNumber: data.phoneNumber,
+          createdAt: data.createdAt?.toDate(),
+          createdBy: data.createdBy,
         };
       }
       return null;

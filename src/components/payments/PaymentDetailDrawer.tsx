@@ -48,7 +48,6 @@ interface PaymentDetailDrawerProps {
   onOpenChange: (open: boolean) => void;
   onVerify: (paymentId: string, notes: string) => void;
   onReject: (paymentId: string, reason: string) => void;
-  onRequestUpdate: (paymentId: string, notes: string) => void;
   onScheduleCollection: (paymentId: string, details: CashCollectionDetails, notes: string) => void;
   onMarkCashReceived: (paymentId: string, notes: string) => void;
 }
@@ -93,7 +92,6 @@ export const PaymentDetailDrawer = ({
   onOpenChange,
   onVerify,
   onReject,
-  onRequestUpdate,
   onScheduleCollection,
   onMarkCashReceived,
 }: PaymentDetailDrawerProps) => {
@@ -135,8 +133,6 @@ export const PaymentDetailDrawer = ({
       onMarkCashReceived(payment.id, staffNotes);
     } else if (actionMode === "reject") {
       onReject(payment.id, staffNotes);
-    } else if (actionMode === "request_update") {
-      onRequestUpdate(payment.id, staffNotes);
     }
     resetAction();
     onOpenChange(false);
@@ -355,10 +351,6 @@ export const PaymentDetailDrawer = ({
                       <XCircle className="h-4 w-4" />
                       Reject Payment
                     </Button>
-                    <Button variant="outline" className="w-full gap-2" onClick={() => setActionMode("request_update")}>
-                      <AlertTriangle className="h-4 w-4" />
-                      Request Update
-                    </Button>
                   </div>
                 ) : (
                   <ActionPanel
@@ -481,7 +473,6 @@ const ActionPanel = ({
   const title =
     actionMode === "verify" ? "Confirm Payment Verification"
       : actionMode === "reject" ? "Reject Payment"
-      : actionMode === "request_update" ? "Request Update"
       : actionMode === "cash_received" ? "Confirm Cash Received"
       : "Schedule Cash Collection";
 
