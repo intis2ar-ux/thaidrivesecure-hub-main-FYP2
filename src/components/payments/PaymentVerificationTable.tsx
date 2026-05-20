@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
+import { formatPrice } from "@/lib/pricing";
 import {
   Table,
   TableBody,
@@ -135,7 +136,7 @@ export const PaymentVerificationTable = ({
                   <span className="text-sm">{payment.method === "qr" ? "QR" : "Cash"}</span>
                 </div>
               </TableCell>
-              <TableCell className="font-semibold text-foreground">RM{payment.amount.toLocaleString()}</TableCell>
+              <TableCell className="font-semibold text-foreground">{formatPrice(payment.amount)}</TableCell>
               <TableCell>
                 <StatusBadge variant={statusInfo.variant}>{statusInfo.label}</StatusBadge>
               </TableCell>

@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { format } from "date-fns";
 import { Application } from "@/types";
 import { loadThaiFonts } from "./fonts";
+import { formatPrice } from "./pricing";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111];
 const ACCENT_GOLD: [number, number, number] = [196, 148, 20];
@@ -150,7 +151,7 @@ export const generateTdacQrPDF = async (
   pdf.text("Total Premium Paid", MARGIN_X + 5, cursor.y + 7);
   setText(pdf, [255, 255, 255], 14, "bold");
   pdf.text(
-    `RM ${(application.totalPrice ?? 0).toFixed(2)}`,
+    formatPrice(application.totalPrice ?? 0),
     PAGE_WIDTH - MARGIN_X - 5,
     cursor.y + 10,
     { align: "right" }

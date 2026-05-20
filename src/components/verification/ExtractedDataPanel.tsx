@@ -28,7 +28,6 @@ export const ExtractedDataPanel = ({
   const getExpectedValue = (label: string): string | undefined => {
     if (!application || !label) return undefined;
     const labelLower = label.toLowerCase();
-    if (labelLower.includes("name")) return application.name;
     if (labelLower.includes("email")) return undefined;
     return undefined;
   };

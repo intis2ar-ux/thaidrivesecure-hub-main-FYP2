@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Payment, PaymentVerificationStatus, CashCollectionDetails } from "@/types";
 import { useReceiptUrl } from "@/hooks/useReceiptUrl";
 import { format } from "date-fns";
+import { formatPrice } from "@/lib/pricing";
 import {
   Sheet,
   SheetContent,
@@ -178,7 +179,7 @@ export const PaymentDetailDrawer = ({
 
             <div className="bg-secondary rounded-lg p-4 text-center">
               <p className="text-sm text-muted-foreground mb-1">Payment Amount</p>
-              <p className="text-3xl font-bold text-primary">RM{payment.amount.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-primary">{formatPrice(payment.amount)}</p>
             </div>
 
             <Separator />
@@ -215,7 +216,7 @@ export const PaymentDetailDrawer = ({
                   </h4>
                   <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="Amount" value={`RM${payment.amount.toLocaleString()}`} />
+                      <InfoRow icon={<CreditCard className="h-3.5 w-3.5" />} label="Amount" value={formatPrice(payment.amount)} />
                       <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label="Reference ID" value={payment.applicationId} mono />
                       <InfoRow
                         icon={<CalendarClock className="h-3.5 w-3.5" />}

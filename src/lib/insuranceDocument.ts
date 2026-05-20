@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { Application, AiVerificationData } from "@/types";
 import { loadThaiFonts } from "./fonts";
+import { formatPrice } from "./pricing";
 
 const BRAND_BLUE: [number, number, number] = [27, 59, 111]; // #1B3B6F
 const ACCENT_TEAL: [number, number, number] = [31, 182, 166]; // #1FB6A6
@@ -140,7 +141,7 @@ const buildPricingSection = (pdf: jsPDF, application: Application, cursor: Curso
 
   setText(pdf, BRAND_BLUE, 12, "bold");
   pdf.text("Total Amount", MARGIN_X, cursor.y);
-  pdf.text(`RM ${(application.totalPrice ?? 0).toFixed(2)}`, MARGIN_X + CONTENT_WIDTH, cursor.y, { align: "right" });
+  pdf.text(formatPrice(application.totalPrice ?? 0), MARGIN_X + CONTENT_WIDTH, cursor.y, { align: "right" });
   cursor.y += 10;
 };
 

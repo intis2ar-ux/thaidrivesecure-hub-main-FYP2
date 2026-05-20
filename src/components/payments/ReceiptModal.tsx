@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { QrCode, Banknote, CheckCircle, Printer, Download } from "lucide-react";
 import { useRef } from "react";
 import tdsLogo from "@/assets/tds-memanjang-logo.png";
+import { formatPrice } from "@/lib/pricing";
 
 interface ReceiptModalProps {
   payment: Payment | null;
@@ -53,7 +54,7 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
             <img src="${tdsLogo}" alt="ThaiDriveSecure by CNT Enterprise" style="height: 48px; margin: 0 auto 12px;" />
 
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Payment Receipt</div>
-            <div class="amount">RM${payment.amount.toLocaleString()}</div>
+            <div class="amount">${formatPrice(payment.amount)}</div>
             <div class="success">Payment Successful</div>
           </div>
           <hr class="divider" />
@@ -63,7 +64,7 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
           <div class="row"><span class="label">Date</span><span class="value">${format(payment.createdAt, "dd MMM yyyy, HH:mm")}</span></div>
           <div class="row"><span class="label">Status</span><span class="value success">${payment.status}</span></div>
           <hr class="divider" />
-          <div class="total"><span>Total Paid</span><span>RM${payment.amount.toLocaleString()}</span></div>
+          <div class="total"><span>Total Paid</span><span>${formatPrice(payment.amount)}</span></div>
         </body>
       </html>
     `);
@@ -78,7 +79,7 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
       "PAYMENT RECEIPT",
       "═══════════════════════════════",
       "",
-      `Amount: RM${payment.amount.toLocaleString()}`,
+      `Amount: ${formatPrice(payment.amount)}`,
       `Status: Payment Successful`,
       "",
       "───────────────────────────────",
@@ -89,7 +90,7 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
       `Status: ${payment.status}`,
       "───────────────────────────────",
       "",
-      `Total Paid: RM${payment.amount.toLocaleString()}`,
+      `Total Paid: ${formatPrice(payment.amount)}`,
     ].join("\n");
 
     const blob = new Blob([text], { type: "text/plain" });
@@ -119,7 +120,7 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
 
           {/* Amount */}
           <div className="text-center space-y-1">
-            <p className="text-2xl font-bold text-foreground">RM{payment.amount.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground">{formatPrice(payment.amount)}</p>
             <p className="text-sm text-success font-medium">Payment Successful</p>
           </div>
 
@@ -160,7 +161,7 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
 
           <div className="flex justify-between font-semibold">
             <span className="text-foreground">Total Paid</span>
-            <span className="text-foreground">RM{payment.amount.toLocaleString()}</span>
+            <span className="text-foreground">{formatPrice(payment.amount)}</span>
           </div>
         </div>
 

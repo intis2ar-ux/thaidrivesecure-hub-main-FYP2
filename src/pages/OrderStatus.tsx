@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ApplicationStatus } from "@/types";
+import { formatPrice } from "@/lib/pricing";
 
 // Status flow steps for the progress indicator
 const STATUS_STEPS: { key: ApplicationStatus; label: string; icon: React.ElementType; description: string }[] = [
@@ -288,7 +289,7 @@ const OrderStatus = () => {
               <DetailRow icon={User} label="Customer" value={order.customerName} />
               <DetailRow icon={Car} label="Vehicle Type" value={order.vehicleType || "-"} />
               <DetailRow icon={MapPin} label="Border Route" value={order.borderRoute || "-"} />
-              <DetailRow icon={CreditCard} label="Total Price" value={order.totalPrice ? `RM${order.totalPrice.toLocaleString()}` : "-"} />
+              <DetailRow icon={CreditCard} label="Total Price" value={order.totalPrice ? formatPrice(order.totalPrice) : "-"} />
               <DetailRow icon={Clock} label="Submitted" value={order.createdAt ? format(order.createdAt, "dd MMM yyyy, HH:mm") : "-"} />
               {order.approvedAt && (
                 <DetailRow icon={CheckCircle2} label="Approved" value={format(order.approvedAt, "dd MMM yyyy, HH:mm")} />

@@ -29,6 +29,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { formatPrice } from "@/lib/pricing";
 
 const Reports = () => {
   const { toast } = useToast();
@@ -209,8 +210,8 @@ const Reports = () => {
       case "revenue":
         return { title: "Revenue by Service Type Report", headers: ["Service", "Count", "Revenue (RM)", "Percentage"],
           rows: revenueData.map(i => { const t = revenueData.reduce((s, r) => s + r.revenue, 0);
-            return [i.service, i.count.toString(), `RM${i.revenue.toLocaleString()}`, `${t > 0 ? ((i.revenue/t)*100).toFixed(1) : "0"}%`]; }),
-          summary: `Total Revenue: RM${revenueData.reduce((s, r) => s + r.revenue, 0).toLocaleString()}` };
+            return [i.service, i.count.toString(), formatPrice(i.revenue), `${t > 0 ? ((i.revenue/t)*100).toFixed(1) : "0"}%`]; }),
+          summary: `Total Revenue: ${formatPrice(revenueData.reduce((s, r) => s + r.revenue, 0))}` };
       case "queue":
         return { title: "Queue Priority Performance Report", headers: ["Queue Type", "Count", "Avg Wait (Days)"],
           rows: [["Priority Queue (Paid)", queueData.priority.toString(), queueData.priorityAvgWait.toString()],
@@ -224,7 +225,7 @@ const Reports = () => {
             ["Confirmed Orders", addonMetricsData.confirmed.toString()],
             ["Completed Orders", addonMetricsData.completed.toString()],
             ["Cancelled Orders", addonMetricsData.cancelled.toString()],
-            ["Total Add-on Revenue", `RM${addonMetricsData.totalRevenue.toLocaleString()}`]
+            ["Total Add-on Revenue", formatPrice(addonMetricsData.totalRevenue)]
           ],
           summary: `Service distribution leads with ${addonMetricsData.typeData[0]?.name || "N/A"}` };
       default: return { title: "Report", headers: [], rows: [], summary: "" };
@@ -348,7 +349,7 @@ const Reports = () => {
             <StatCard title="Total Applications" value={processingTimeData.total} icon={FileBarChart} iconBg="bg-primary/10" iconColor="text-primary" />
             <StatCard title="Avg. Processing" value={`${processingTimeData.averageDays}d`} icon={Clock} iconBg="bg-accent/10" iconColor="text-accent" />
             <StatCard title="AI Confidence" value={`${aiMetricsData.avgConfidence}%`} icon={Brain} iconBg="bg-success/10" iconColor="text-success" />
-            <StatCard title="Total Revenue" value={`RM${(revenueData.reduce((s, r) => s + r.revenue, 0)).toLocaleString()}`} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
+            <StatCard title="Total Revenue" value={formatPrice(revenueData.reduce((s, r) => s + r.revenue, 0))} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
           </div>
 
           {/* Generate Report Controls */}
@@ -597,7 +598,7 @@ const Reports = () => {
                           <TableRow key={item.service} className="hover:bg-muted/30 transition-colors border-b border-border/50">
                             <TableCell className="text-sm font-medium">{item.service}</TableCell>
                             <TableCell className="text-sm text-right">{item.count}</TableCell>
-                            <TableCell className="text-sm text-right font-semibold">RM{item.revenue.toLocaleString()}</TableCell>
+                            <TableCell className="text-sm text-right font-semibold">{formatPrice(item.revenue)}</TableCell>
                             <TableCell className="text-sm text-right text-muted-foreground">{percentage}%</TableCell>
                           </TableRow>
                         );
@@ -605,7 +606,7 @@ const Reports = () => {
                       <TableRow className="bg-muted/40 font-semibold">
                         <TableCell className="text-sm">Total</TableCell>
                         <TableCell className="text-sm text-right">{revenueData.reduce((s, r) => s + r.count, 0)}</TableCell>
-                        <TableCell className="text-sm text-right">RM{revenueData.reduce((s, r) => s + r.revenue, 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-sm text-right">{formatPrice(revenueData.reduce((s, r) => s + r.revenue, 0))}</TableCell>
                         <TableCell className="text-sm text-right">100%</TableCell>
                       </TableRow>
                     </TableBody>
@@ -674,7 +675,7 @@ const Reports = () => {
                 <StatCard title="Total Add-ons" value={addonMetricsData.total} icon={Package} iconBg="bg-primary/10" iconColor="text-primary" />
                 <StatCard title="Completion Rate" value={`${addonMetricsData.completionRate}%`} icon={TrendingUp} iconBg="bg-success/10" iconColor="text-success" />
                 <StatCard title="Confirmed" value={addonMetricsData.confirmed} icon={Shield} iconBg="bg-accent/10" iconColor="text-accent" />
-                <StatCard title="Add-on Revenue" value={`RM${addonMetricsData.totalRevenue.toLocaleString()}`} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
+                <StatCard title="Add-on Revenue" value={formatPrice(addonMetricsData.totalRevenue)} icon={DollarSign} iconBg="bg-warning/10" iconColor="text-warning" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border border-border shadow-sm">

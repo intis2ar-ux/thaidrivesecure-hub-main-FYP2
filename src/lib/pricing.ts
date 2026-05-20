@@ -166,5 +166,5 @@ export const calculatePricingBreakdown = (
  * Format price in RM currency.
  */
 export const formatPrice = (amount: number): string => {
-  return `RM ${amount.toFixed(2)}`;
+  return `RM ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };

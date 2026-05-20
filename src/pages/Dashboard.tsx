@@ -32,6 +32,7 @@ import {
 } from "recharts";
 import { useApplications, usePayments, useAnalytics } from "@/hooks/useFirestore";
 import { cn } from "@/lib/utils";
+import { formatPrice } from "@/lib/pricing";
 
 const chartTooltipStyle = {
   backgroundColor: "hsl(var(--card))",
@@ -115,7 +116,7 @@ const Dashboard = () => {
           />
           <StatCard
             title="Total Revenue"
-            value={`RM${analytics.totalRevenue.toLocaleString()}`}
+            value={formatPrice(analytics.totalRevenue)}
             icon={DollarSign}
             iconColor="text-success"
             iconBg="bg-success/8"
@@ -230,7 +231,7 @@ const Dashboard = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} label={{ value: "Month", position: "insideBottom", offset: -2, fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} label={{ value: "Revenue (RM)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: "hsl(var(--muted-foreground))", style: { textAnchor: "middle" } }} />
-                  <Tooltip contentStyle={chartTooltipStyle} formatter={(value: number) => [`RM${value.toLocaleString()}`, "Revenue"]} />
+                  <Tooltip contentStyle={chartTooltipStyle} formatter={(value: number) => [formatPrice(value), "Revenue"]} />
                   <Line type="monotone" dataKey="revenue" stroke="hsl(var(--accent))" strokeWidth={2} dot={{ fill: "hsl(var(--accent))", r: 3, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>

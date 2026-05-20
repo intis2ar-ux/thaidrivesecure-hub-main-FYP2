@@ -28,6 +28,7 @@ import { usePayments } from "@/hooks/useFirestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo } from "react";
 import { CashCollectionDetails, Payment } from "@/types";
+import { formatPrice } from "@/lib/pricing";
 import { ReceiptModal } from "@/components/payments/ReceiptModal";
 import { PaymentDetailDrawer } from "@/components/payments/PaymentDetailDrawer";
 import { PaymentVerificationTable } from "@/components/payments/PaymentVerificationTable";
@@ -268,7 +269,7 @@ const Payments = () => {
           />
           <StatCard
             title="Verified Revenue"
-            value={`RM${totalRevenue.toLocaleString()}`}
+            value={formatPrice(totalRevenue)}
             icon={DollarSign}
             trend={totalRevenue > 0 ? { value: 8, isPositive: true } : undefined}
           />

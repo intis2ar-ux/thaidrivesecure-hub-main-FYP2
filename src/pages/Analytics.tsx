@@ -25,6 +25,7 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAnalyticsDashboard, AIInsight } from "@/hooks/useAnalyticsDashboard";
+import { formatPrice } from "@/lib/pricing";
 
 const insightIcons: Record<AIInsight["type"], React.ElementType> = {
   positive: CheckCircle,
@@ -159,7 +160,7 @@ const Analytics = () => {
           <KPICard
             icon={DollarSign}
             title="Total Revenue"
-            value={`RM${kpis.totalRevenue.toLocaleString()}`}
+            value={formatPrice(kpis.totalRevenue)}
             trend={kpis.trends.revenue}
             color="primary"
           />
@@ -284,7 +285,7 @@ const Analytics = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} label={{ value: "Month", position: "insideBottom", offset: -2, fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} label={{ value: "Revenue (RM)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: "hsl(var(--muted-foreground))", style: { textAnchor: "middle" } }} />
-                  <Tooltip contentStyle={chartTooltipStyle} formatter={(value: number) => [`RM${value.toLocaleString()}`, "Revenue"]} />
+                  <Tooltip contentStyle={chartTooltipStyle} formatter={(value: number) => [formatPrice(value), "Revenue"]} />
                   <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} animationDuration={800} />
                 </BarChart>
               </ResponsiveContainer>
@@ -491,7 +492,7 @@ const Analytics = () => {
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm">RM{(app.totalPrice || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-sm">{formatPrice(app.totalPrice || 0)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {format(new Date(app.createdAt), "dd MMM yyyy")}
                         </TableCell>

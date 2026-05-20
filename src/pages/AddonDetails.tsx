@@ -17,6 +17,7 @@ import {
 import { useAddon } from "@/hooks/useFirestore";
 import { AddonType, AddonStatus } from "@/types";
 import { toast } from "sonner";
+import { formatPrice } from "@/lib/pricing";
 
 // Progress Tracker Component
 const OrderProgress = ({ status }: { status: AddonStatus }) => {
@@ -351,7 +352,7 @@ const AddonDetails = () => {
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vendor Integration</p>
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-bold">{addon.vendorName || "TDS System"}</span>
-                          <span className="text-lg font-black text-primary">RM{addon.cost.toFixed(2)}</span>
+                          <span className="text-lg font-black text-primary">{formatPrice(addon.cost)}</span>
                         </div>
                       </div>
                     </div>
