@@ -13,7 +13,7 @@ import { StatusHistorySection } from "./sections/StatusHistorySection";
 import { DocumentPreviewModal } from "./sections/DocumentPreviewModal";
 import { AIAnalysisSection } from "./sections/AIAnalysisSection";
 import { ReuploadRequestModal } from "./sections/ReuploadRequestModal";
-import { useApplications, useReuploadRequests } from "@/hooks/useFirestore";
+import { useApplications, useAIVerifications } from "@/hooks/useFirestore";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -24,7 +24,6 @@ interface ApplicationDetailPanelProps {
 
 export const ApplicationDetailPanel = ({ application, onClose }: ApplicationDetailPanelProps) => {
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
   const [reuploadModal, setReuploadModal] = useState<{
     isOpen: boolean;
     type: "passport" | "vehicle_grant";
@@ -33,8 +32,7 @@ export const ApplicationDetailPanel = ({ application, onClose }: ApplicationDeta
     type: "passport",
   });
 
-  const { requestReupload, verifyReupload } = useApplications();
-  const { requests: reuploadRequests } = useReuploadRequests(application.id);
+  const { requestReupload } = useApplications();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -57,7 +55,7 @@ export const ApplicationDetailPanel = ({ application, onClose }: ApplicationDeta
   const handleConfirmReupload = async (reason: string, notes: string) => {
     try {
       const type = reuploadModal.type === "vehicle_grant" ? "vehicleGrant" : "passport";
-      
+
       await requestReupload(application.id, type, {
         reason,
         notes,
@@ -75,25 +73,6 @@ export const ApplicationDetailPanel = ({ application, onClose }: ApplicationDeta
         variant: "destructive"
       });
       throw error; // Re-throw to let the modal handle loading state
-    }
-  };
-
-  const handleVerifyReupload = async () => {
-    setIsVerifying(true);
-    try {
-      await verifyReupload(application.id, user?.id || "unknown_staff");
-      toast({
-        title: "✅ Documents Verified",
-        description: `${application.orderId} has been moved back to Pending. Payment can now proceed.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to verify re-upload.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsVerifying(false);
     }
   };
 
@@ -117,13 +96,10 @@ export const ApplicationDetailPanel = ({ application, onClose }: ApplicationDeta
         <Separator />
         <PackagesSection application={application} />
         <Separator />
-        <DocumentsSection 
-          application={application} 
-          reuploadRequests={reuploadRequests}
-          onPreview={setPreviewImage} 
+        <DocumentsSection
+          application={application}
+          onPreview={setPreviewImage}
           onReupload={handleReuploadRequest}
-          onVerifyReupload={handleVerifyReupload}
-          isVerifying={isVerifying}
         />
         <Separator />
         <AIAnalysisSection application={application} />

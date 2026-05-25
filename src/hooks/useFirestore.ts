@@ -198,7 +198,7 @@ export const useApplications = () => {
 
   useEffect(() => {
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -317,7 +317,7 @@ export const useApplications = () => {
     // 1. Fetch latest version of application to ensure we have verification IDs
     const appRef = doc(db, "orders", application.id);
     const appSnap = await getDoc(appRef);
-    const currentApp = appSnap.exists() 
+    const currentApp = appSnap.exists()
       ? mapFirestoreOrderToApplication(appSnap.id, appSnap.data())
       : application;
 
@@ -334,7 +334,7 @@ export const useApplications = () => {
     const fetchOcrData = async (): Promise<AiVerificationData> => {
       const result: AiVerificationData = {};
       console.log(`[fetchOcrData] Starting for app: ${currentApp.id}, orderId: ${currentApp.orderId}`);
-      
+
       try {
         // Try direct ID lookups if available
         if (currentApp.latestPassportVerificationId) {
@@ -372,7 +372,7 @@ export const useApplications = () => {
     const ocrData = await fetchOcrData();
     const requiresPassportAnalysis = !!currentApp.documents?.passportUrls?.length;
     const requiresVehicleGrantAnalysis = !!currentApp.documents?.vehicleGrantUrl;
-    
+
     // Convert hard errors to warnings to unblock user
     if (requiresPassportAnalysis && !ocrData.passportData) {
       console.warn("[generate] Passport data missing for PDF generation");
@@ -404,9 +404,9 @@ export const useApplications = () => {
 
     const [insuranceUrl, tdacUrl, tm2Url, tm3Url] = await Promise.all([
       upload(insuranceBlob, `insurance_${ts}.pdf`),
-      upload(tdacBlob,      `tdac_${ts}.pdf`),
-      upload(tm2Blob,       `tm2_${ts}.pdf`),
-      upload(tm3Blob,       `tm3_${ts}.pdf`),
+      upload(tdacBlob, `tdac_${ts}.pdf`),
+      upload(tm2Blob, `tm2_${ts}.pdf`),
+      upload(tm3Blob, `tm3_${ts}.pdf`),
     ]);
 
     // 5. Update Firestore order document — mark as completed
@@ -443,7 +443,7 @@ export const useApplications = () => {
   ) => {
     try {
       const orderRef = doc(db, "orders", orderId);
-      
+
       // Update order status — store document type so mobile app knows which doc to show
       await updateDoc(orderRef, {
         status: "REUPLOAD_REQUIRED",
@@ -647,7 +647,7 @@ export const useAIVerifications = () => {
 
   useEffect(() => {
     const q = query(collection(db, "ai_verifications"), orderBy("timestamp", "desc"));
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -764,10 +764,10 @@ export const usePayments = () => {
                     logs.push({
                       action: logData.action === "payment_verified" ? "verified"
                         : logData.action === "payment_rejected" ? "rejected"
-                        : logData.action === "payment_collection_scheduled" ? "collection_scheduled"
-                        : logData.action === "payment_cash_received" ? "cash_received"
-                        : logData.action === "payment_submitted" ? "pending_verification"
-                        : "updated",
+                          : logData.action === "payment_collection_scheduled" ? "collection_scheduled"
+                            : logData.action === "payment_cash_received" ? "cash_received"
+                              : logData.action === "payment_submitted" ? "pending_verification"
+                                : "updated",
                       performedBy: logData.performedBy || "Unknown",
                       notes: logData.notes,
                       timestamp: convertTimestamp(logData.timestamp),
@@ -817,11 +817,11 @@ export const usePayments = () => {
               const latest = verificationHistory[0];
               verificationStatus = latest.action === "verified" ? "verified"
                 : latest.action === "rejected" ? "rejected"
-                : latest.action === "collection_scheduled" ? "collection_scheduled"
-                : latest.action === "cash_received" ? "cash_received"
-                : latest.action === "pending_verification" && method === "cash" ? "awaiting_cash_payment"
-                : latest.action === "pending_verification" ? "pending_verification"
-                : "updated";
+                  : latest.action === "collection_scheduled" ? "collection_scheduled"
+                    : latest.action === "cash_received" ? "cash_received"
+                      : latest.action === "pending_verification" && method === "cash" ? "awaiting_cash_payment"
+                        : latest.action === "pending_verification" ? "pending_verification"
+                          : "updated";
               verifiedBy = latest.performedBy;
               verificationNotes = latest.notes;
               if (latest.action === "verified") verifiedAt = latest.timestamp;
@@ -949,7 +949,7 @@ export const useAddons = () => {
         snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data();
           const orderId = docSnap.id;
-          
+
           // Handle both array-based and root-level structures
           const addonServices = data.addonServices || [];
           const rootStatus = (data.status || "pending").toString().toLowerCase();
@@ -1060,7 +1060,7 @@ export const useAddons = () => {
       const firestoreUpdates: any = { ...updates };
       if (updates.applicantName) firestoreUpdates.fullName = updates.applicantName;
       if (updates.applicantPhone) firestoreUpdates.phone = updates.applicantPhone;
-      
+
       await updateDoc(doc(db, "addOnOrder", orderId), firestoreUpdates);
     } catch (err: any) {
       console.error("Error updating addon:", err);
@@ -1183,7 +1183,7 @@ export const useReports = () => {
 
   useEffect(() => {
     const q = query(collection(db, "reports"), orderBy("createdAt", "desc"));
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -1353,10 +1353,10 @@ export const useStaff = (adminUid?: string) => {
             avatarUrl: d.avatarUrl || d.avatar || "",
           } as StaffAccount;
         });
-        
+
         // Sort in memory to avoid excluding documents without createdAt field
         list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        
+
         setStaff(list);
         setLoading(false);
         setError(null);
@@ -1406,14 +1406,14 @@ export const useStaff = (adminUid?: string) => {
       await deleteApp(tempApp);
       return { success: true, uid };
     } catch (err: any) {
-      try { await deleteApp(tempApp); } catch {}
+      try { await deleteApp(tempApp); } catch { }
       throw err;
     }
   };
 
   const updateStaff = async (uid: string, updates: Partial<StaffAccount>) => {
     const firestoreUpdates: any = { ...updates, updatedAt: serverTimestamp() };
-    
+
     // Map fullName back to name for userWdboard
     if (updates.fullName) {
       firestoreUpdates.name = updates.fullName;
@@ -1421,7 +1421,7 @@ export const useStaff = (adminUid?: string) => {
     }
 
     if (updates.createdAt) delete firestoreUpdates.createdAt;
-    
+
     await updateDoc(doc(db, "userWdboard", uid), firestoreUpdates);
   };
 
