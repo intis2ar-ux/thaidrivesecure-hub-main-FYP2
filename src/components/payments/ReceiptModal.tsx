@@ -19,6 +19,18 @@ interface ReceiptModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const escapeHtml = (value: unknown): string =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[char];
+  });
+
 export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps) => {
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -31,10 +43,17 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    const paymentId = escapeHtml(payment.id);
+    const customerName = escapeHtml(payment.customerName);
+    const paymentMethod = payment.method === "qr" ? "QR Payment" : "Cash";
+    const paymentDate = escapeHtml(format(payment.createdAt, "dd MMM yyyy, HH:mm"));
+    const paymentStatus = escapeHtml(payment.status);
+    const paymentAmount = escapeHtml(formatPrice(payment.amount));
+
     printWindow.document.write(`
       <html>
         <head>
-          <title>Receipt - ${payment.id}</title>
+          <title>Receipt - ${paymentId}</title>
           <style>
             body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; max-width: 400px; margin: 0 auto; }
             .header { text-align: center; margin-bottom: 24px; }
@@ -54,17 +73,17 @@ export const ReceiptModal = ({ payment, open, onOpenChange }: ReceiptModalProps)
             <img src="${tdsLogo}" alt="ThaiDriveSecure by CNT Enterprise" style="height: 48px; margin: 0 auto 12px;" />
 
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Payment Receipt</div>
-            <div class="amount">${formatPrice(payment.amount)}</div>
+            <div class="amount">${paymentAmount}</div>
             <div class="success">Payment Successful</div>
           </div>
           <hr class="divider" />
-          <div class="row"><span class="label">Payment ID</span><span class="value mono">${payment.id}</span></div>
-          <div class="row"><span class="label">Customer</span><span class="value">${payment.customerName}</span></div>
-          <div class="row"><span class="label">Method</span><span class="value">${payment.method === "qr" ? "QR Payment" : "Cash"}</span></div>
-          <div class="row"><span class="label">Date</span><span class="value">${format(payment.createdAt, "dd MMM yyyy, HH:mm")}</span></div>
-          <div class="row"><span class="label">Status</span><span class="value success">${payment.status}</span></div>
+          <div class="row"><span class="label">Payment ID</span><span class="value mono">${paymentId}</span></div>
+          <div class="row"><span class="label">Customer</span><span class="value">${customerName}</span></div>
+          <div class="row"><span class="label">Method</span><span class="value">${paymentMethod}</span></div>
+          <div class="row"><span class="label">Date</span><span class="value">${paymentDate}</span></div>
+          <div class="row"><span class="label">Status</span><span class="value success">${paymentStatus}</span></div>
           <hr class="divider" />
-          <div class="total"><span>Total Paid</span><span>${formatPrice(payment.amount)}</span></div>
+          <div class="total"><span>Total Paid</span><span>${paymentAmount}</span></div>
         </body>
       </html>
     `);

@@ -22,7 +22,6 @@ import StaffManagement from "./pages/StaffManagement";
 
 
 import NotFound from "./pages/NotFound";
-import { ReuploadWatcher } from "./components/ReuploadWatcher";
 
 const queryClient = new QueryClient();
 
@@ -32,7 +31,6 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
-        <ReuploadWatcher />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Login />} />

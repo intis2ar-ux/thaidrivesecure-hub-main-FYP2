@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Sidebar } from "./Sidebar";
 import { Loader2 } from "lucide-react";
+import { ReuploadWatcher } from "@/components/ReuploadWatcher";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -28,6 +29,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      <ReuploadWatcher />
       <Sidebar />
       <main className="flex-1 ml-60 transition-all duration-300">
         {children}
