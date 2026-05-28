@@ -14,12 +14,69 @@ const DOCUMENT_AI_LOCATION = "us";
 // which are then used to auto-fill insurance docs, TM2/TM3, and TDAC forms.
 const PASSPORT_PROCESSOR_ID = process.env.PASSPORT_PROCESSOR_ID || "43b80fb543a0ca3b";
 const VEHICLE_GRANT_PROCESSOR_ID = process.env.VEHICLE_GRANT_PROCESSOR_ID || "588ec71b62ae5425";
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+]);
+const assertActiveDashboardUser = async (uid) => {
+    const profileSnap = await admin.firestore().collection("userWdboard").doc(uid).get();
+    const profile = profileSnap.data();
+    if (!profileSnap.exists ||
+        !["admin", "staff"].includes(profile?.role) ||
+        profile?.status === "disabled") {
+        throw new https_1.HttpsError("permission-denied", "User is not authorized to process documents.");
+    }
+};
+const validateStorageDownloadUrl = (rawUrl, applicationId) => {
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(rawUrl);
+    }
+    catch {
+        throw new https_1.HttpsError("invalid-argument", "documentUrl must be a valid URL.");
+    }
+    if (parsedUrl.protocol !== "https:") {
+        throw new https_1.HttpsError("invalid-argument", "documentUrl must use HTTPS.");
+    }
+    const bucketName = admin.storage().bucket().name;
+    const hostname = parsedUrl.hostname.toLowerCase();
+    let objectPath = "";
+    if (hostname === "firebasestorage.googleapis.com") {
+        const match = parsedUrl.pathname.match(/^\/v0\/b\/([^/]+)\/o\/([^/]+)/);
+        if (!match || match[1] !== bucketName) {
+            throw new https_1.HttpsError("invalid-argument", "documentUrl must point to this Firebase Storage bucket.");
+        }
+        objectPath = decodeURIComponent(match[2]);
+    }
+    else if (hostname === "storage.googleapis.com") {
+        const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+        if (pathParts[0] !== bucketName || pathParts.length < 2) {
+            throw new https_1.HttpsError("invalid-argument", "documentUrl must point to this Firebase Storage bucket.");
+        }
+        objectPath = decodeURIComponent(pathParts.slice(1).join("/"));
+    }
+    else if (hostname === `${bucketName}.storage.googleapis.com`) {
+        objectPath = decodeURIComponent(parsedUrl.pathname.replace(/^\//, ""));
+    }
+    else {
+        throw new https_1.HttpsError("invalid-argument", "documentUrl host is not allowed.");
+    }
+    if (!objectPath.startsWith(`orders/${applicationId}/`)) {
+        throw new https_1.HttpsError("invalid-argument", "documentUrl must belong to the requested application.");
+    }
+    return parsedUrl.toString();
+};
 exports.processDocument = (0, https_1.onCall)({ region: CLOUD_FUNCTION_REGION }, async (request) => {
     // Authentication check
     if (!request.auth) {
         throw new https_1.HttpsError("unauthenticated", "User must be logged in to process documents.");
     }
+    await assertActiveDashboardUser(request.auth.uid);
     const { documentUrl, documentType, applicationId } = request.data;
+    console.log(`Processing ${documentType} for app ${applicationId}.`);
     if (!documentUrl || !documentType || !applicationId) {
         throw new https_1.HttpsError("invalid-argument", "Missing required fields: documentUrl, documentType, applicationId.");
     }
@@ -35,18 +92,31 @@ exports.processDocument = (0, https_1.onCall)({ region: CLOUD_FUNCTION_REGION },
         else {
             throw new https_1.HttpsError("invalid-argument", "Invalid documentType. Must be 'passport' or 'vehicle_grant'.");
         }
-        const PROJECT_ID = process.env.GCLOUD_PROJECT ||
-            admin.app().options.projectId ||
-            "67186739808";
-        // Download the document file from the provided Firebase Storage URL
-        const response = await fetch(documentUrl);
+        const safeDocumentUrl = validateStorageDownloadUrl(documentUrl, applicationId);
+        const PROJECT_ID = admin.app().options.projectId || "thaidrive-b7eb4";
+        console.log(`Using Project ID for Document AI: ${PROJECT_ID}`);
+        // Download only project-owned Firebase Storage documents.
+        const response = await fetch(safeDocumentUrl);
         if (!response.ok) {
             throw new https_1.HttpsError("internal", "Failed to download document from the provided URL.");
         }
+        const contentLength = Number(response.headers.get("content-length") || "0");
+        if (contentLength > MAX_DOCUMENT_BYTES) {
+            throw new https_1.HttpsError("invalid-argument", "Document exceeds the 10MB limit.");
+        }
         const arrayBuffer = await response.arrayBuffer();
+        if (arrayBuffer.byteLength > MAX_DOCUMENT_BYTES) {
+            throw new https_1.HttpsError("invalid-argument", "Document exceeds the 10MB limit.");
+        }
         const buffer = Buffer.from(arrayBuffer);
         const encodedImage = buffer.toString("base64");
-        const mimeType = response.headers.get("content-type") || "application/pdf";
+        const mimeType = (response.headers.get("content-type") || "application/pdf")
+            .split(";")[0]
+            .trim()
+            .toLowerCase();
+        if (!ALLOWED_DOCUMENT_MIME_TYPES.has(mimeType)) {
+            throw new https_1.HttpsError("invalid-argument", "Unsupported document content type.");
+        }
         // Build processor resource name
         const name = `projects/${PROJECT_ID}/locations/${DOCUMENT_AI_LOCATION}/processors/${processorId}`;
         // Call Document AI API
@@ -55,6 +125,13 @@ exports.processDocument = (0, https_1.onCall)({ region: CLOUD_FUNCTION_REGION },
             rawDocument: {
                 content: encodedImage,
                 mimeType,
+            },
+            processOptions: {
+                ocrConfig: {
+                    hints: {
+                        languageHints: ["en", "th"],
+                    },
+                },
             },
         });
         const { document } = result;
@@ -163,7 +240,7 @@ exports.processDocument = (0, https_1.onCall)({ region: CLOUD_FUNCTION_REGION },
         console.error("Document AI processing error:", error);
         if (error instanceof https_1.HttpsError)
             throw error;
-        throw new https_1.HttpsError("internal", "An error occurred while processing the document.", String(error));
+        throw new https_1.HttpsError("internal", "An error occurred while processing the document.");
     }
 });
 //# sourceMappingURL=index.js.map

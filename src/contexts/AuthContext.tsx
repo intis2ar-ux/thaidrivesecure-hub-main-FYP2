@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      let profile = await fetchUserProfile(userCredential.user.uid);
+      const profile = await fetchUserProfile(userCredential.user.uid);
       
       if (!profile) {
         await signOut(auth);
@@ -129,19 +129,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setUser(profile);
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Login error:", error);
+      const errorCode =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code)
+          : "";
       let errorMessage = "Login failed. Please try again.";
       
-      if (error.code === "auth/user-not-found") {
+      if (errorCode === "auth/user-not-found") {
         errorMessage = "No account found with this email.";
-      } else if (error.code === "auth/wrong-password") {
+      } else if (errorCode === "auth/wrong-password") {
         errorMessage = "Incorrect password.";
-      } else if (error.code === "auth/invalid-email") {
+      } else if (errorCode === "auth/invalid-email") {
         errorMessage = "Invalid email address.";
-      } else if (error.code === "auth/too-many-requests") {
+      } else if (errorCode === "auth/too-many-requests") {
         errorMessage = "Too many failed attempts. Please try again later.";
-      } else if (error.code === "auth/invalid-credential") {
+      } else if (errorCode === "auth/invalid-credential") {
         errorMessage = "Invalid email or password.";
       }
       

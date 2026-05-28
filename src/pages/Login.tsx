@@ -62,10 +62,14 @@ const Login = () => {
         title: "Reset email sent",
         description: "Check your inbox for password reset instructions",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        typeof error === "object" && error !== null && "message" in error
+          ? String(error.message)
+          : "Failed to send reset email";
       toast({
         title: "Error",
-        description: error.message || "Failed to send reset email",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
