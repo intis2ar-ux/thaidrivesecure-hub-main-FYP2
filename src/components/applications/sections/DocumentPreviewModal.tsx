@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
@@ -18,6 +18,11 @@ export const DocumentPreviewModal = ({
 }: DocumentPreviewModalProps) => {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [imageUrl]);
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
@@ -50,20 +55,22 @@ export const DocumentPreviewModal = ({
           </div>
         </div>
         <div className="overflow-auto flex items-center justify-center bg-black/5 min-h-[400px] max-h-[calc(90vh-60px)]">
-          <img
-            src={imageUrl}
-            alt={title}
-            className="transition-transform duration-200"
-            style={{
-              transform: `scale(${zoom}) rotate(${rotation}deg)`,
-              maxWidth: zoom <= 1 ? "100%" : "none",
-            }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-              (e.target as HTMLImageElement).parentElement!.innerHTML =
-                '<p class="text-sm text-muted-foreground p-8">Unable to load image. The file may not be accessible.</p>';
-            }}
-          />
+          {imageLoadFailed ? (
+            <p className="text-sm text-muted-foreground p-8">
+              Unable to load image. The file may not be accessible.
+            </p>
+          ) : (
+            <img
+              src={imageUrl}
+              alt={title}
+              className="transition-transform duration-200"
+              style={{
+                transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                maxWidth: zoom <= 1 ? "100%" : "none",
+              }}
+              onError={() => setImageLoadFailed(true)}
+            />
+          )}
         </div>
       </DialogContent>
     </Dialog>

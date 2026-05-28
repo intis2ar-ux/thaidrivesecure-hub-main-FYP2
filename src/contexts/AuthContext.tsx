@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
   signOut, 
   onAuthStateChanged,
   User as FirebaseUser 
@@ -14,7 +13,6 @@ interface AuthContextType {
   user: User | null;
   firebaseUser: FirebaseUser | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, name: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -46,11 +44,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (userDoc.exists()) {
         const data = userDoc.data();
+        const role = data.role as UserRole | undefined;
+        if (role !== "admin" && role !== "staff") {
+          return null;
+        }
+
         return {
           id: uid,
           email: data.email,
           name: data.fullName || data.name || "",
-          role: data.role as UserRole,
+          role,
           lastLogin: data.lastLogin?.toDate() || new Date(),
           avatar: data.avatarUrl || data.avatar,
           status: data.status,
@@ -100,29 +103,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       let profile = await fetchUserProfile(userCredential.user.uid);
       
       if (!profile) {
-        // Auto-create userWdboard document if it doesn't exist
-        const newProfile = {
-          email: userCredential.user.email || email,
-          name: userCredential.user.displayName || email.split("@")[0],
-          role: "staff" as UserRole,
-          avatarUrl: "",
-          createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp(),
+        await signOut(auth);
+        setUser(null);
+        return {
+          success: false,
+          error: "This account is not authorized for dashboard access.",
         };
-        await setDoc(doc(db, "userWdboard", userCredential.user.uid), newProfile);
-        profile = {
-          id: userCredential.user.uid,
-          email: newProfile.email,
-          name: newProfile.name,
-          role: newProfile.role,
-          lastLogin: new Date(),
-        };
-      } else {
-        // Update last login in background
-        setDoc(doc(db, "userWdboard", userCredential.user.uid), {
-          lastLogin: serverTimestamp()
-        }, { merge: true });
       }
+
+      if (profile.status === "disabled") {
+        await signOut(auth);
+        setUser(null);
+        return {
+          success: false,
+          error: "This dashboard account has been disabled.",
+        };
+      }
+
+      // Update last login in background without blocking dashboard entry.
+      setDoc(doc(db, "userWdboard", userCredential.user.uid), {
+        lastLogin: serverTimestamp()
+      }, { merge: true }).catch((error) => {
+        console.error("Error updating last login:", error);
+      });
 
       setUser(profile);
       return { success: true };
@@ -146,51 +149,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (
-    email: string, 
-    password: string, 
-    name: string, 
-    role: UserRole
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Create user profile in Firestore
-      await setDoc(doc(db, "userWdboard", userCredential.user.uid), {
-        email,
-        name,
-        role,
-        avatarUrl: "",
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-      });
-
-      const profile: User = {
-        id: userCredential.user.uid,
-        email,
-        name,
-        role,
-        lastLogin: new Date(),
-      };
-
-      setUser(profile);
-      return { success: true };
-    } catch (error: any) {
-      console.error("Registration error:", error);
-      let errorMessage = "Registration failed. Please try again.";
-      
-      if (error.code === "auth/email-already-in-use") {
-        errorMessage = "An account with this email already exists.";
-      } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password must be at least 6 characters.";
-      } else if (error.code === "auth/invalid-email") {
-        errorMessage = "Invalid email address.";
-      }
-      
-      return { success: false, error: errorMessage };
-    }
-  };
-
   const logout = async () => {
     try {
       await signOut(auth);
@@ -206,7 +164,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         user,
         firebaseUser,
         login,
-        register,
         logout,
         isAuthenticated: !!user,
         isLoading,

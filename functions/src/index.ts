@@ -24,6 +24,77 @@ interface ProcessDocumentRequest {
   documentType: "passport" | "vehicle_grant";
 }
 
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const assertActiveDashboardUser = async (uid: string): Promise<void> => {
+  const profileSnap = await admin.firestore().collection("userWdboard").doc(uid).get();
+  const profile = profileSnap.data();
+
+  if (
+    !profileSnap.exists ||
+    !["admin", "staff"].includes(profile?.role) ||
+    profile?.status === "disabled"
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "User is not authorized to process documents."
+    );
+  }
+};
+
+const validateStorageDownloadUrl = (
+  rawUrl: string,
+  applicationId: string
+): string => {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    throw new HttpsError("invalid-argument", "documentUrl must be a valid URL.");
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    throw new HttpsError("invalid-argument", "documentUrl must use HTTPS.");
+  }
+
+  const bucketName = admin.storage().bucket().name;
+  const hostname = parsedUrl.hostname.toLowerCase();
+  let objectPath = "";
+
+  if (hostname === "firebasestorage.googleapis.com") {
+    const match = parsedUrl.pathname.match(/^\/v0\/b\/([^/]+)\/o\/([^/]+)/);
+    if (!match || match[1] !== bucketName) {
+      throw new HttpsError("invalid-argument", "documentUrl must point to this Firebase Storage bucket.");
+    }
+    objectPath = decodeURIComponent(match[2]);
+  } else if (hostname === "storage.googleapis.com") {
+    const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+    if (pathParts[0] !== bucketName || pathParts.length < 2) {
+      throw new HttpsError("invalid-argument", "documentUrl must point to this Firebase Storage bucket.");
+    }
+    objectPath = decodeURIComponent(pathParts.slice(1).join("/"));
+  } else if (hostname === `${bucketName}.storage.googleapis.com`) {
+    objectPath = decodeURIComponent(parsedUrl.pathname.replace(/^\//, ""));
+  } else {
+    throw new HttpsError("invalid-argument", "documentUrl host is not allowed.");
+  }
+
+  if (!objectPath.startsWith(`orders/${applicationId}/`)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "documentUrl must belong to the requested application."
+    );
+  }
+
+  return parsedUrl.toString();
+};
+
 export const processDocument = onCall(
   { region: CLOUD_FUNCTION_REGION },
   async (request: CallableRequest<ProcessDocumentRequest>) => {
@@ -35,8 +106,10 @@ export const processDocument = onCall(
       );
     }
 
+    await assertActiveDashboardUser(request.auth.uid);
+
     const { documentUrl, documentType, applicationId } = request.data;
-    console.log(`Processing ${documentType} for app ${applicationId}. URL: ${documentUrl}`);
+    console.log(`Processing ${documentType} for app ${applicationId}.`);
 
     if (!documentUrl || !documentType || !applicationId) {
       throw new HttpsError(
@@ -59,22 +132,35 @@ export const processDocument = onCall(
         );
       }
 
+      const safeDocumentUrl = validateStorageDownloadUrl(documentUrl, applicationId);
       const PROJECT_ID = admin.app().options.projectId || "thaidrive-b7eb4";
       console.log(`Using Project ID for Document AI: ${PROJECT_ID}`);
 
-      // Download the document file from the provided Firebase Storage URL
-      const response = await fetch(documentUrl);
+      // Download only project-owned Firebase Storage documents.
+      const response = await fetch(safeDocumentUrl);
       if (!response.ok) {
         throw new HttpsError(
           "internal",
           "Failed to download document from the provided URL."
         );
       }
+      const contentLength = Number(response.headers.get("content-length") || "0");
+      if (contentLength > MAX_DOCUMENT_BYTES) {
+        throw new HttpsError("invalid-argument", "Document exceeds the 10MB limit.");
+      }
       const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > MAX_DOCUMENT_BYTES) {
+        throw new HttpsError("invalid-argument", "Document exceeds the 10MB limit.");
+      }
       const buffer = Buffer.from(arrayBuffer);
       const encodedImage = buffer.toString("base64");
-      const mimeType =
-        response.headers.get("content-type") || "application/pdf";
+      const mimeType = (response.headers.get("content-type") || "application/pdf")
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+      if (!ALLOWED_DOCUMENT_MIME_TYPES.has(mimeType)) {
+        throw new HttpsError("invalid-argument", "Unsupported document content type.");
+      }
 
       // Build processor resource name
       const name = `projects/${PROJECT_ID}/locations/${DOCUMENT_AI_LOCATION}/processors/${processorId}`;
@@ -214,8 +300,7 @@ export const processDocument = onCall(
       if (error instanceof HttpsError) throw error;
       throw new HttpsError(
         "internal",
-        "An error occurred while processing the document.",
-        String(error)
+        "An error occurred while processing the document."
       );
     }
   }
